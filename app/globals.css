@@ -1,0 +1,21 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    color-scheme: dark;
+  }
+
+  body {
+    @apply bg-ink-950 text-white font-sans antialiased;
+  }
+
+  ::selection {
+    @apply bg-saffron-500/30;
+  }
+
+  :focus-visible {
+    @apply outline-2 outline-offset-2 outline-saffron-500;
+  }
+}

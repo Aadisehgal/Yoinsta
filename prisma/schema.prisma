@@ -1,0 +1,153 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─────────────────────────────────────────────
+// Core models (spec section 7)
+// ─────────────────────────────────────────────
+
+model User {
+  id             String    @id @default(cuid())
+  email          String    @unique
+  name           String?
+  image          String?
+  role           String    @default("USER") // USER | ADMIN
+  adFree         Boolean   @default(false) // set true by redeeming a Master Access Code
+  adminPinOk     Boolean   @default(false)
+  createdAt      DateTime  @default(now())
+
+  apiKeys        ApiKey[]
+  channels       Channel[]
+  redemptions    CodeRedemption[]
+  competitors    Competitor[]
+  usageLogs      UsageLog[]
+  adUnlocks      AdUnlock[]
+}
+
+model ApiKey {
+  id           String    @id @default(cuid())
+  userId       String
+  provider     String    // groq | gemini | openai | claude
+  keyEncrypted String    // AES-256 encrypted
+  isActive     Boolean   @default(true)
+  lastTestedAt DateTime?
+  lastTestOk   Boolean?
+
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, provider])
+}
+
+model Channel {
+  id             String    @id @default(cuid())
+  userId         String
+  platform       String    // youtube | instagram
+  platformId     String    // channelId / igUserId
+  title          String
+  thumbnail      String?
+  accessTokenEnc String?   // encrypted OAuth refresh token
+  connectedAt    DateTime  @default(now())
+
+  user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  videos         Video[]
+
+  @@unique([userId, platform, platformId])
+}
+
+model Video {
+  id          String   @id
+  channelId   String
+  title       String
+  publishedAt DateTime
+  views       Int      @default(0)
+  likes       Int      @default(0)
+  comments    Int      @default(0)
+  ctr         Float?
+  avgViewDur  Float?
+  fetchedAt   DateTime @default(now())
+
+  channel     Channel  @relation(fields: [channelId], references: [id], onDelete: Cascade)
+}
+
+model Competitor {
+  id        String @id @default(cuid())
+  userId    String
+  platform  String
+  channelId String
+  title     String
+
+  user      User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model UsageLog { // quota/rate limiting + analytics
+  id        String   @id @default(cuid())
+  userId    String
+  action    String
+  meta      Json?
+  createdAt DateTime @default(now())
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model AdminLog {
+  id        String   @id @default(cuid())
+  actorId   String
+  action    String
+  meta      Json?
+  createdAt DateTime @default(now())
+}
+
+// ─────────────────────────────────────────────
+// Master Access Code system (spec section 5)
+// ─────────────────────────────────────────────
+
+model AccessCode {
+  id          String   @id @default(cuid())
+  codeHash    String   @unique // store HASH, never plain code
+  isActive    Boolean  @default(true)
+  maxUses     Int      @default(10)
+  usedCount   Int      @default(0)
+  expiresAt   DateTime?
+  createdBy   String   // admin user id
+  createdAt   DateTime @default(now())
+
+  redemptions CodeRedemption[]
+}
+
+model CodeRedemption {
+  id          String   @id @default(cuid())
+  codeId      String
+  userId      String
+  redeemedAt  DateTime @default(now())
+
+  code        AccessCode @relation(fields: [codeId], references: [id], onDelete: Cascade)
+  user        User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([codeId, userId]) // one user redeems once
+}
+
+// ─────────────────────────────────────────────
+// Rewarded-ad unlock system (replaces subscription gating)
+// One ad = one resource unlocked (e.g. one video's SEO analysis).
+// A different resource (a different video) needs a fresh ad.
+// ─────────────────────────────────────────────
+
+model AdUnlock {
+  id          String    @id @default(cuid())
+  userId      String
+  resourceKey String    // e.g. "seo:<videoId>", "keywords:<topicHash>"
+  status      String    @default("PENDING") // PENDING (ad shown, waiting for reward) | VERIFIED
+  nonce       String    @unique // handed to the client when the ad starts, redeemed on completion
+  createdAt   DateTime  @default(now())
+  nonceExpiresAt DateTime // anti-abuse window to actually watch the ad, e.g. now + 5 min
+  verifiedAt  DateTime?
+
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, resourceKey])
+}
