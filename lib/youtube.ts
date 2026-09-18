@@ -39,7 +39,10 @@ export async function exchangeCodeForTokens(code: string): Promise<TokenResponse
       grant_type: "authorization_code",
     }),
   });
-  if (!res.ok) throw new Error(`YouTube token exchange failed: ${res.status}`);
+  if (!res.ok) {
+    const body = await res.text().catch(() => "");
+    throw new Error(`YouTube token exchange failed: ${res.status} ${body}`);
+  }
   return res.json();
 }
 
