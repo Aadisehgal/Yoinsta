@@ -1,4 +1,5 @@
 import { decrypt } from "@/lib/encryption";
+import { prisma } from "@/lib/prisma";
 
 const REDIRECT_URI = `${process.env.NEXTAUTH_URL}/api/youtube/callback`;
 
@@ -39,7 +40,10 @@ export async function exchangeCodeForTokens(code: string): Promise<TokenResponse
       grant_type: "authorization_code",
     }),
   });
-  if (!res.ok) throw new Error(`YouTube token exchange failed: ${res.status}`);
+  if (!res.ok) {
+    const body = await res.text().catch(() => "");
+    throw new Error(`YouTube token exchange failed: ${res.status} ${body}`);
+  }
   return res.json();
 }
 
@@ -185,5 +189,148 @@ export async function getAnalyticsSummary(accessToken: string): Promise<Analytic
     totalWatchMinutes28d: rows.reduce((sum, r) => sum + r[2], 0),
     subscribersGained28d: rows.reduce((sum, r) => sum + r[3], 0),
     daily: rows.map(([date, views]) => ({ date, views })),
+  };
+}
+
+/** Looks up the user's connected channel and returns a fresh access token, or null if not connected. */
+export async function getUserAccessToken(userId: string): Promise<string | null> {
+  const channel = await prisma.channel.findFirst({
+    where: { userId, platform: "youtube" },
+  });
+  if (!channel?.accessTokenEnc) return null;
+  return getFreshAccessToken(channel.accessTokenEnc);
+}
+
+/** Pulls an 11-char video ID out of a full URL (watch/shorts/youtu.be) or accepts a raw ID. */
+export function extractVideoId(input: string): string | null {
+  const trimmed = input.trim();
+  if (/^[\w-]{11}$/.test(trimmed)) return trimmed;
+
+  try {
+    const url = new URL(trimmed);
+    if (url.hostname.includes("youtu.be")) {
+      return url.pathname.slice(1).split("/")[0] || null;
+    }
+    if (url.hostname.includes("youtube.com")) {
+      if (url.pathname.startsWith("/shorts/")) {
+        return url.pathname.split("/")[2] || null;
+      }
+      return url.searchParams.get("v");
+    }
+  } catch {
+    return null;
+  }
+  return null;
+}
+
+/**
+ * Google's public (undocumented but widely used) autocomplete endpoint — the
+ * same suggestions YouTube's own search box shows. No API key or quota cost.
+ */
+export async function getAutocompleteSuggestions(query: string): Promise<string[]> {
+  const res = await fetch(
+    `https://suggestqueries.google.com/complete/search?client=firefox&ds=yt&q=${encodeURIComponent(query)}`
+  );
+  if (!res.ok) return [];
+  const data = await res.json().catch(() => null);
+  return Array.isArray(data?.[1]) ? data[1] : [];
+}
+
+export interface SearchVideoResult {
+  id: string;
+  title: string;
+  channelTitle: string;
+  thumbnail: string;
+  views: number;
+}
+
+/**
+ * search.list costs 100 quota units (vs ~1 for list-by-id calls) — this is
+ * the expensive call in the whole app. Callers MUST cache the result (24h,
+ * per spec) and rate-limit it; see /api/youtube/keywords.
+ */
+export async function searchVideos(
+  accessToken: string,
+  query: string,
+  maxResults = 10
+): Promise<{ videos: SearchVideoResult[] }> {
+  const searchRes = await fetch(
+    `https://www.googleapis.com/youtube/v3/search?part=snippet&type=video&maxResults=${maxResults}&q=${encodeURIComponent(query)}`,
+    { headers: { Authorization: `Bearer ${accessToken}` } }
+  );
+  if (!searchRes.ok) throw new Error(`search.list failed: ${searchRes.status}`);
+  const searchData = await searchRes.json();
+
+  interface RawSearchItem {
+    id: { videoId: string };
+    snippet: {
+      title: string;
+      channelTitle: string;
+      thumbnails?: { medium?: { url: string }; default?: { url: string } };
+    };
+  }
+
+  const items: RawSearchItem[] = searchData.items ?? [];
+  const ids = items.map((i) => i.id.videoId).filter(Boolean);
+  if (ids.length === 0) return { videos: [] };
+
+  const statsRes = await fetch(
+    `https://www.googleapis.com/youtube/v3/videos?part=statistics&id=${ids.join(",")}`,
+    { headers: { Authorization: `Bearer ${accessToken}` } }
+  );
+  if (!statsRes.ok) throw new Error(`videos.list (stats) failed: ${statsRes.status}`);
+  const statsData = await statsRes.json();
+
+  interface RawStats { id: string; statistics: { viewCount?: string } }
+  const viewsById = new Map<string, number>(
+    (statsData.items as RawStats[] ?? []).map((v) => [v.id, Number(v.statistics.viewCount ?? 0)])
+  );
+
+  return {
+    videos: items.map((item) => ({
+      id: item.id.videoId,
+      title: item.snippet.title,
+      channelTitle: item.snippet.channelTitle,
+      thumbnail: item.snippet.thumbnails?.medium?.url ?? item.snippet.thumbnails?.default?.url ?? "",
+      views: viewsById.get(item.id.videoId) ?? 0,
+    })),
+  };
+}
+
+export interface PublicVideoDetails {
+  id: string;
+  title: string;
+  description: string;
+  tags: string[];
+  thumbnail: string;
+  channelTitle: string;
+  publishedAt: string;
+  views: number;
+  likes: number;
+  comments: number;
+}
+
+/** Fetches any public video by ID — 1 quota unit. Used by the SEO Score Checker. */
+export async function getVideoById(accessToken: string, videoId: string): Promise<PublicVideoDetails | null> {
+  const res = await fetch(
+    `https://www.googleapis.com/youtube/v3/videos?part=snippet,statistics&id=${videoId}`,
+    { headers: { Authorization: `Bearer ${accessToken}` } }
+  );
+  if (!res.ok) throw new Error(`videos.list failed: ${res.status}`);
+  const data = await res.json();
+  const item = data.items?.[0];
+  if (!item) return null;
+
+  return {
+    id: item.id,
+    title: item.snippet.title,
+    description: item.snippet.description ?? "",
+    tags: item.snippet.tags ?? [],
+    thumbnail: item.snippet.thumbnails?.medium?.url ?? item.snippet.thumbnails?.default?.url ?? "",
+    channelTitle: item.snippet.channelTitle,
+    publishedAt: item.snippet.publishedAt,
+    views: Number(item.statistics?.viewCount ?? 0),
+    likes: Number(item.statistics?.likeCount ?? 0),
+    comments: Number(item.statistics?.commentCount ?? 0),
   };
 }

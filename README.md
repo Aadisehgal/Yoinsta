@@ -130,6 +130,28 @@ easy to add if you want it exact.
    `playlistItems.list`, and `videos.list` each cost ~1 unit per call, so the Redis caching here
    is doing real work, not just a nice-to-have.
 
+## Build Order Step 4 — done
+
+- `lib/seo-score.ts` — deterministic (no AI) scorer: title (length, numbers, power words, caps ratio),
+  description (length, timestamps, links, hashtags), tags (count, character budget, long-tail mix).
+  Same input always gives the same score, and every deduction comes with a specific tip.
+- `/api/youtube/seo-score` — paste any public video URL, get a 0–100 score + breakdown. 1h cache,
+  1 quota unit per lookup (videos.list). Ad-gated per video ID — matches the "one ad per video"
+  model from the pivot.
+- `/api/youtube/keywords` — autocomplete-based keyword suggestions (free, no quota — Google's public
+  suggest endpoint) plus a **heuristic** competition/opportunity score from the topic's top 10
+  ranking videos (avg views + channel concentration). 24h cache (per spec) and a strict 5/day quota
+  on top of that, because the underlying `search.list` call costs **100 quota units** — by far the
+  most expensive call in the app. Ad-gated per topic.
+- Both tools reuse the signed-in user's own connected YouTube access token (`getUserAccessToken` in
+  `lib/youtube.ts`) rather than a separate API key, so there's no new Google Cloud step needed right
+  now — the tradeoff is they only work once a channel is connected.
+
+**Being upfront about the "opportunity score":** it's a heuristic built from real data (top-ranking
+videos' views and channel diversity), not actual Google Trends search-volume numbers — that needs a
+paid Google Ads API integration. The UI says this explicitly rather than implying more precision
+than it has.
+
 ## Companion Android app
 
 `<AdGate>` (`components/ad-gate.tsx`) now detects a native bridge (`window.AndroidAds`) and shows
@@ -139,5 +161,6 @@ built with Termux/Gradle, currently wired to Google's public test AdMob IDs.
 
 ## Next step
 
-Build Order Step 4: Keyword Research tool + Video SEO Score Checker — the first real feature to
-wrap in `<AdGate>`.
+Build Order Step 5: Admin panel (access-code generation/redemption UI) + BullMQ background jobs for
+heavier YouTube data refreshes. Video Comparison (spec section 3, feature 7) is also still open —
+straightforward to add on top of the video-fetch code already here.
