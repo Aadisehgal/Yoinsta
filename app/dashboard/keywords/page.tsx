@@ -47,7 +47,7 @@ export default function KeywordsPage() {
     <div className="max-w-2xl space-y-6">
       <div>
         <h1 className="font-display text-2xl font-medium">Keyword Research</h1>
-        <p className="mt-1 text-sm text-muted">See what people search for and how hard it'd be to rank.</p>
+        <p className="mt-1 text-sm text-muted">See what people search for and how hard it&apos;d be to rank.</p>
       </div>
 
       <Card>
@@ -96,7 +96,7 @@ function KeywordResults({ topic }: { topic: string }) {
       <Card>
         <CardTitle>Opportunity</CardTitle>
         <CardDescription>
-          Estimated from this topic's top-ranking videos — not official Google Trends data.
+          Estimated from this topic&apos;s top-ranking videos — not official Google Trends data.
         </CardDescription>
         <div className="mt-4 grid grid-cols-2 gap-4">
           <div>

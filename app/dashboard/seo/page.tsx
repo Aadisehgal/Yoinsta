@@ -64,7 +64,7 @@ export default function SeoToolsPage() {
     <div className="max-w-2xl space-y-6">
       <div>
         <h1 className="font-display text-2xl font-medium">SEO Score Checker</h1>
-        <p className="mt-1 text-sm text-muted">Paste any YouTube video URL — yours or a competitor's.</p>
+        <p className="mt-1 text-sm text-muted">Paste any YouTube video URL — yours or a competitor&apos;s.</p>
       </div>
 
       <Card>
