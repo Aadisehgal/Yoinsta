@@ -65,8 +65,7 @@ export async function GET(req: NextRequest) {
     const response = NextResponse.redirect(new URL("/dashboard", base));
     response.cookies.delete("yt_oauth_state");
     return response;
-  } catch (err) {
-    console.error("[youtube/callback]", err);
+  } catch {
     return fail("Couldn't connect your YouTube channel. Please try again.");
   }
 }

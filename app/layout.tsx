@@ -6,8 +6,6 @@ import "./globals.css";
 const inter = Inter({ subsets: ["latin"], variable: "--font-inter" });
 const lexend = Lexend({ subsets: ["latin"], variable: "--font-lexend" });
 
-export const dynamic = "force-dynamic";
-
 export const metadata: Metadata = {
   title: "Yoinsta — Ek App. Do Platforms. Unlimited Growth.",
   description:

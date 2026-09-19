@@ -1,11 +1,10 @@
-import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 
 /** Call this from EVERY admin route that changes state (code, plan grants, etc). */
 export async function logAdminAction(
   actorId: string,
   action: string,
-  meta?: Prisma.InputJsonValue
+  meta?: Record<string, unknown>
 ) {
   await prisma.adminLog.create({
     data: { actorId, action, meta: meta ?? undefined },
