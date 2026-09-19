@@ -79,15 +79,15 @@ export interface YouTubeChannel {
   uploadsPlaylistId: string;
 }
 
-export async function getMyChannel(accessToken: string): Promise<YouTubeChannel> {
+async function fetchChannel(accessToken: string, queryParam: string): Promise<YouTubeChannel | null> {
   const res = await fetch(
-    "https://www.googleapis.com/youtube/v3/channels?part=snippet,statistics,contentDetails&mine=true",
+    `https://www.googleapis.com/youtube/v3/channels?part=snippet,statistics,contentDetails&${queryParam}`,
     { headers: { Authorization: `Bearer ${accessToken}` } }
   );
   if (!res.ok) throw new Error(`channels.list failed: ${res.status}`);
   const data = await res.json();
   const item = data.items?.[0];
-  if (!item) throw new Error("No YouTube channel found on this Google account.");
+  if (!item) return null;
 
   return {
     id: item.id,
@@ -98,6 +98,39 @@ export async function getMyChannel(accessToken: string): Promise<YouTubeChannel>
     videoCount: Number(item.statistics.videoCount ?? 0),
     uploadsPlaylistId: item.contentDetails.relatedPlaylists.uploads,
   };
+}
+
+export async function getMyChannel(accessToken: string): Promise<YouTubeChannel> {
+  const channel = await fetchChannel(accessToken, "mine=true");
+  if (!channel) throw new Error("No YouTube channel found on this Google account.");
+  return channel;
+}
+
+/** Turns a pasted handle, URL, or raw channel ID into a channels.list query param. */
+export function parseChannelInput(input: string): { id?: string; forHandle?: string } {
+  const trimmed = input.trim();
+  if (/^UC[\w-]{22}$/.test(trimmed)) return { id: trimmed };
+
+  try {
+    const url = new URL(trimmed);
+    if (url.hostname.includes("youtube.com")) {
+      const parts = url.pathname.split("/").filter(Boolean);
+      if (parts[0] === "channel" && parts[1]) return { id: parts[1] };
+      if (parts[0]?.startsWith("@")) return { forHandle: parts[0] };
+      if (parts[0] === "c" && parts[1]) return { forHandle: `@${parts[1]}` };
+    }
+  } catch {
+    // not a URL — fall through to handle-style lookup below
+  }
+
+  return { forHandle: trimmed.startsWith("@") ? trimmed : `@${trimmed}` };
+}
+
+/** Looks up ANY public channel — used by the Competitors tool. */
+export async function getPublicChannel(accessToken: string, input: string): Promise<YouTubeChannel | null> {
+  const parsed = parseChannelInput(input);
+  const queryParam = parsed.id ? `id=${parsed.id}` : `forHandle=${encodeURIComponent(parsed.forHandle as string)}`;
+  return fetchChannel(accessToken, queryParam);
 }
 
 export interface YouTubeVideoStats {

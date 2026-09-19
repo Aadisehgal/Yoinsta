@@ -152,6 +152,19 @@ videos' views and channel diversity), not actual Google Trends search-volume num
 paid Google Ads API integration. The UI says this explicitly rather than implying more precision
 than it has.
 
+## Sidebar cleanup — Competitors done, Instagram honestly not
+
+- **Competitors** (`/dashboard/competitors`) — add up to 5 channels by URL/@handle/ID
+  (`lib/youtube.ts` → `parseChannelInput` + `getPublicChannel`), see their subscriber/view/video
+  counts next to your own, 1h cached per channel. Not ad-gated — it's a running list you glance at,
+  not a one-off deep analysis like SEO Score or Keywords.
+- **Instagram** (`/dashboard/instagram`) — replaced the raw 404 with an honest "coming soon" card
+  instead of building a shortcut version. Real reason: this needs its own Meta Developer app,
+  Instagram OAuth flow, and Meta's App Review for the `instagram_basic`/`instagram_manage_insights`
+  permissions — a separate setup on the scale of everything we just did for Google Cloud, except
+  Meta's review is typically slower and stricter (screencasts, use-case justification, review
+  queue). Worth doing as its own dedicated step rather than rushing it in here.
+
 ## Companion Android app
 
 `<AdGate>` (`components/ad-gate.tsx`) now detects a native bridge (`window.AndroidAds`) and shows
