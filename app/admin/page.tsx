@@ -1,14 +1,15 @@
 import { Card, CardTitle, CardDescription } from "@/components/ui/card";
+import { AccessCodesPanel } from "@/components/admin/access-codes-panel";
 
 export default function AdminHomePage() {
   return (
     <div className="grid gap-4 sm:grid-cols-2">
-      <Card>
+      <Card className="sm:col-span-2">
         <CardTitle>Access codes</CardTitle>
-        <CardDescription>
-          Generate ad-free access codes and view redemption history. Coming in Build Order
-          Step 5.
-        </CardDescription>
+        <CardDescription>Generate ad-free access codes and view their usage.</CardDescription>
+        <div className="mt-4">
+          <AccessCodesPanel />
+        </div>
       </Card>
       <Card>
         <CardTitle>Users</CardTitle>

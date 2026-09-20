@@ -165,6 +165,20 @@ than it has.
   Meta's review is typically slower and stricter (screencasts, use-case justification, review
   queue). Worth doing as its own dedicated step rather than rushing it in here.
 
+## Access-code system — done
+
+- `lib/access-code.ts` — `createAccessCode()` generates a readable code (`YOIN-XXXX-XXXX`, no
+  ambiguous characters) and stores **only its SHA-256 hash**; the plain code is returned exactly
+  once, at creation, same rule as every other secret in this project. `redeemAccessCode()` checks
+  active/expiry/usage-limit/already-redeemed, then atomically (one `$transaction`) records the
+  redemption, bumps `usedCount`, and sets `User.adFree = true`.
+- Admin: the "Access codes" card on `/admin` (`components/admin/access-codes-panel.tsx`) generates
+  codes with a configurable max-uses, lists existing ones with their usage, and can
+  activate/deactivate any code. Every generate/toggle action logs to `AdminLog`.
+- User: a "Have a code?" card on Settings redeems one and calls NextAuth's `update()` afterward so
+  the ad-free badge in the topbar flips immediately, without needing to log out and back in — same
+  trick used for the admin PIN.
+
 ## Companion Android app
 
 `<AdGate>` (`components/ad-gate.tsx`) now detects a native bridge (`window.AndroidAds`) and shows
@@ -174,6 +188,6 @@ built with Termux/Gradle, currently wired to Google's public test AdMob IDs.
 
 ## Next step
 
-Build Order Step 5: Admin panel (access-code generation/redemption UI) + BullMQ background jobs for
-heavier YouTube data refreshes. Video Comparison (spec section 3, feature 7) is also still open —
-straightforward to add on top of the video-fetch code already here.
+Build Order Step 5 remainder: Users list + Admin logs viewer on `/admin` (still placeholders), plus
+BullMQ background jobs for heavier YouTube data refreshes. Video Comparison (spec section 3,
+feature 7) and Instagram (section above) are also still open.

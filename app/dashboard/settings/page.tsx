@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useSession } from "next-auth/react";
 import { Card, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 
@@ -31,12 +32,15 @@ type Status =
   | { type: "error"; message: string };
 
 export default function SettingsPage() {
+  const { data: session, update } = useSession();
   const [keys, setKeys] = useState<SavedKey[]>([]);
   const [loadingKeys, setLoadingKeys] = useState(true);
   const [provider, setProvider] = useState("groq");
   const [apiKey, setApiKey] = useState("");
   const [status, setStatus] = useState<Status>({ type: "idle" });
   const [youtube, setYoutube] = useState<YouTubeStatus | null>(null);
+  const [redeemInput, setRedeemInput] = useState("");
+  const [redeemStatus, setRedeemStatus] = useState<Status>({ type: "idle" });
 
   async function loadYoutubeStatus() {
     const res = await fetch("/api/youtube/status");
@@ -104,6 +108,26 @@ export default function SettingsPage() {
     loadKeys();
   }
 
+  async function handleRedeem(e: React.FormEvent) {
+    e.preventDefault();
+    setRedeemStatus({ type: "testing" });
+
+    const res = await fetch("/api/codes/redeem", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ code: redeemInput }),
+    });
+    const data = await res.json();
+
+    if (res.ok) {
+      setRedeemStatus({ type: "success", message: "Ads removed — enjoy!" });
+      setRedeemInput("");
+      await update(); // refresh session so the ad-free badge updates immediately
+    } else {
+      setRedeemStatus({ type: "error", message: data.error ?? "That code didn't work." });
+    }
+  }
+
   return (
     <div className="max-w-2xl space-y-6">
       <div>
@@ -138,6 +162,30 @@ export default function SettingsPage() {
           )}
         </div>
       </Card>
+
+      {!session?.user.adFree && (
+        <Card>
+          <CardTitle>Have a code?</CardTitle>
+          <CardDescription>Redeem an access code to remove ads permanently.</CardDescription>
+          <form onSubmit={handleRedeem} className="mt-4 flex gap-2">
+            <input
+              value={redeemInput}
+              onChange={(e) => setRedeemInput(e.target.value)}
+              placeholder="YOIN-XXXX-XXXX"
+              className="flex-1 rounded-md border border-border bg-ink-950 px-3 py-2 font-mono text-sm uppercase"
+            />
+            <Button type="submit" disabled={!redeemInput || redeemStatus.type === "testing"}>
+              {redeemStatus.type === "testing" ? "Checking…" : "Redeem"}
+            </Button>
+          </form>
+          {redeemStatus.type === "success" && (
+            <p className="mt-3 text-sm text-teal-400">{redeemStatus.message}</p>
+          )}
+          {redeemStatus.type === "error" && (
+            <p className="mt-3 text-sm text-red-400">{redeemStatus.message}</p>
+          )}
+        </Card>
+      )}
 
       <Card>
         <form onSubmit={handleSave} className="space-y-4">
