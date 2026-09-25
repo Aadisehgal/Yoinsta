@@ -165,6 +165,20 @@ than it has.
   Meta's review is typically slower and stricter (screencasts, use-case justification, review
   queue). Worth doing as its own dedicated step rather than rushing it in here.
 
+## Bug fix — /admin/pin infinite redirect loop
+
+`app/admin/layout.tsx` redirected to `/admin/pin` whenever the PIN wasn't confirmed yet — but
+`/admin/pin` is *itself* nested under `/admin`, so it inherited that same layout and immediately
+redirected to itself. Moved the protected pages into a route group so the PIN page escapes it:
+
+```
+app/admin/(protected)/layout.tsx   ← the redirect checks (was app/admin/layout.tsx)
+app/admin/(protected)/page.tsx     ← the admin home page (was app/admin/page.tsx)
+app/admin/pin/page.tsx             ← unchanged, now outside the layout that was looping it
+```
+
+Route groups (parens) don't affect the URL — `/admin` and `/admin/pin` resolve exactly as before.
+
 ## Access-code system — done
 
 - `lib/access-code.ts` — `createAccessCode()` generates a readable code (`YOIN-XXXX-XXXX`, no
