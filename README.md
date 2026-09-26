@@ -165,6 +165,23 @@ than it has.
   Meta's review is typically slower and stricter (screencasts, use-case justification, review
   queue). Worth doing as its own dedicated step rather than rushing it in here.
 
+## Outlier Video Finder — done (priority 1 of 4)
+
+- `lib/youtube.ts` → `findOutlierVideos()` — searches a topic (`search.list`, `order=viewCount`),
+  fetches view counts for the results, batch-fetches each result's channel stats (`channels.list`
+  with comma-separated IDs, 1 call for up to 50 channels), and computes
+  `multiplier = video views ÷ (channel's total views ÷ total videos)`. Sorted highest multiplier
+  first — the videos that broke out furthest from that channel's normal.
+- `/api/youtube/outliers` — same cost profile and guardrails as Keywords: ad-gated per topic,
+  24h cache, 5/day quota on cache misses (this is another `search.list` call, 100 units).
+- `/dashboard/outliers` — topic search, results link straight to YouTube, multiplier shown as a
+  colored badge (red 20x+, amber 8x+, teal 3x+).
+
+**Next up (priorities 2–4 from the roadmap):** Daily Video Ideas, AI Thumbnail Generator (needs a
+new image-generation capability — BYOK providers don't all support image gen the same way text
+does, so this needs its own design pass), then Rising/Trending Keywords (needs a time-series data
+store, not just a snapshot).
+
 ## Channel Audit chatbot — done
 
 A real conversational AI assistant on the "AI Tools" page (now tabbed: Channel Audit + Title

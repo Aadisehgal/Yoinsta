@@ -330,6 +330,99 @@ export async function searchVideos(
   };
 }
 
+export interface OutlierVideo {
+  id: string;
+  title: string;
+  channelId: string;
+  channelTitle: string;
+  thumbnail: string;
+  views: number;
+  publishedAt: string;
+  channelAvgViews: number;
+  multiplier: number;
+}
+
+/**
+ * Finds videos that massively over-performed their channel's normal average —
+ * a signal the topic/format broke out, worth studying or replicating.
+ * Costs 100 (search) + ~2 (stats + channel batch) quota units per call.
+ */
+export async function findOutlierVideos(
+  accessToken: string,
+  query: string,
+  maxResults = 15
+): Promise<OutlierVideo[]> {
+  const searchRes = await fetch(
+    `https://www.googleapis.com/youtube/v3/search?part=snippet&type=video&order=viewCount&maxResults=${maxResults}&q=${encodeURIComponent(query)}`,
+    { headers: { Authorization: `Bearer ${accessToken}` } }
+  );
+  if (!searchRes.ok) throw new Error(`search.list failed: ${searchRes.status}`);
+  const searchData = await searchRes.json();
+
+  interface RawSearchItem {
+    id: { videoId: string };
+    snippet: {
+      title: string;
+      channelId: string;
+      channelTitle: string;
+      publishedAt: string;
+      thumbnails?: { medium?: { url: string }; default?: { url: string } };
+    };
+  }
+
+  const items: RawSearchItem[] = searchData.items ?? [];
+  const videoIds = items.map((i) => i.id.videoId).filter(Boolean);
+  if (videoIds.length === 0) return [];
+
+  const videosRes = await fetch(
+    `https://www.googleapis.com/youtube/v3/videos?part=statistics&id=${videoIds.join(",")}`,
+    { headers: { Authorization: `Bearer ${accessToken}` } }
+  );
+  if (!videosRes.ok) throw new Error(`videos.list (stats) failed: ${videosRes.status}`);
+  const videosData = await videosRes.json();
+
+  interface RawVideoStats { id: string; statistics: { viewCount?: string } }
+  const viewsById = new Map<string, number>(
+    (videosData.items as RawVideoStats[] ?? []).map((v) => [v.id, Number(v.statistics.viewCount ?? 0)])
+  );
+
+  const channelIds = Array.from(new Set(items.map((i) => i.snippet.channelId)));
+  const channelsRes = await fetch(
+    `https://www.googleapis.com/youtube/v3/channels?part=statistics&id=${channelIds.join(",")}`,
+    { headers: { Authorization: `Bearer ${accessToken}` } }
+  );
+  if (!channelsRes.ok) throw new Error(`channels.list (batch) failed: ${channelsRes.status}`);
+  const channelsData = await channelsRes.json();
+
+  interface RawChannelStats { id: string; statistics: { viewCount?: string; videoCount?: string } }
+  const channelAvgById = new Map<string, number>(
+    (channelsData.items as RawChannelStats[] ?? []).map((c) => {
+      const totalViews = Number(c.statistics.viewCount ?? 0);
+      const totalVideos = Math.max(1, Number(c.statistics.videoCount ?? 1));
+      return [c.id, Math.round(totalViews / totalVideos)];
+    })
+  );
+
+  return items
+    .map((item) => {
+      const views = viewsById.get(item.id.videoId) ?? 0;
+      const channelAvgViews = channelAvgById.get(item.snippet.channelId) ?? 0;
+      const multiplier = channelAvgViews > 0 ? views / channelAvgViews : 0;
+      return {
+        id: item.id.videoId,
+        title: item.snippet.title,
+        channelId: item.snippet.channelId,
+        channelTitle: item.snippet.channelTitle,
+        thumbnail: item.snippet.thumbnails?.medium?.url ?? item.snippet.thumbnails?.default?.url ?? "",
+        views,
+        publishedAt: item.snippet.publishedAt,
+        channelAvgViews,
+        multiplier: Math.round(multiplier * 10) / 10,
+      };
+    })
+    .sort((a, b) => b.multiplier - a.multiplier);
+}
+
 export interface PublicVideoDetails {
   id: string;
   title: string;

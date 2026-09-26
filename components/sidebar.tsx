@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import {
   LayoutDashboard,
   Search,
+  Flame,
   Gauge,
   Users,
   Sparkles,
@@ -16,6 +17,7 @@ import { cn } from "@/lib/utils";
 const NAV_ITEMS = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/dashboard/keywords", label: "Keywords", icon: Search },
+  { href: "/dashboard/outliers", label: "Outliers", icon: Flame },
   { href: "/dashboard/seo", label: "SEO Tools", icon: Gauge },
   { href: "/dashboard/competitors", label: "Competitors", icon: Users },
   { href: "/dashboard/ai-tools", label: "AI Tools", icon: Sparkles },
