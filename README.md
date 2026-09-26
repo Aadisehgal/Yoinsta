@@ -165,6 +165,25 @@ than it has.
   Meta's review is typically slower and stricter (screencasts, use-case justification, review
   queue). Worth doing as its own dedicated step rather than rushing it in here.
 
+## Channel Audit chatbot — done
+
+A real conversational AI assistant on the "AI Tools" page (now tabbed: Channel Audit + Title
+Generator), grounded in the user's actual channel data rather than generic advice:
+
+- `ai/channel-context.ts` — pulls real channel stats, 28-day analytics, and the 15 most recent
+  videos with their view/like/comment counts, formats it as plain text.
+- The system prompt hands this to the model with an explicit instruction to cite real numbers and
+  say "can't tell from this data" rather than guess — same honesty principle as the SEO scorer and
+  Keywords tool.
+- `ai/router.ts` gained a chat-shaped path alongside the existing single-prompt one: `runChat()` +
+  `callProviderChat()`, with a `chatXxx()` variant per provider (Groq/OpenAI take a `system` message
+  in the array, Claude uses its separate `system` param, Gemini uses `systemInstruction` + a proper
+  chat history via `startChat()`).
+- Context is cached 15 minutes (`ai:channel-context:<userId>`) so a whole conversation doesn't
+  re-fetch YouTube data on every message.
+- **Not ad-gated**, same reasoning as the title generator: it runs on the user's own AI key, so it
+  costs Yoinsta nothing regardless of how often it's used.
+
 ## Bug fix — /admin/pin infinite redirect loop
 
 `app/admin/layout.tsx` redirected to `/admin/pin` whenever the PIN wasn't confirmed yet — but

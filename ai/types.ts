@@ -4,3 +4,8 @@ export interface AIResponse {
   provider: string;
   error?: string;
 }
+
+export interface ChatMessage {
+  role: "user" | "assistant";
+  content: string;
+}
