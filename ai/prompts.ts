@@ -23,3 +23,25 @@ export const PROMPTS = {
 } as const;
 
 export type AIFeature = keyof typeof PROMPTS;
+
+/** Grounded in the creator's real channel data — used by Daily Ideas → Personalized. */
+export function personalizedIdeasPrompt(channelContext: string): string {
+  return (
+    `You are a YouTube content strategist. Here is this creator's real channel data:\n\n${channelContext}\n\n` +
+    `Based on this data — their niche, what's performed well, gaps in their recent uploads — suggest 5 ` +
+    `specific video ideas for their next upload. Return ONLY a numbered list, one idea per line, each ` +
+    `combining a concrete title with a short reason it should work for THIS channel specifically (not ` +
+    `generic advice).`
+  );
+}
+
+/** Grounded in free autocomplete suggestions (no quota cost) — used by Daily Ideas → Trending. */
+export function trendingIdeasPrompt(topic: string, relatedSearches: string[]): string {
+  const related = relatedSearches.length ? relatedSearches.join(", ") : "(no related searches found)";
+  return (
+    `A YouTube creator wants video ideas about: "${topic}". People are also currently searching for ` +
+    `these related terms: ${related}.\n\nSuggest 5 specific, timely video ideas that capitalize on this ` +
+    `search demand. Return ONLY a numbered list, one idea per line, each with a concrete title and a ` +
+    `short reason it should perform well right now.`
+  );
+}

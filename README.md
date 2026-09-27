@@ -165,6 +165,22 @@ than it has.
   Meta's review is typically slower and stricter (screencasts, use-case justification, review
   queue). Worth doing as its own dedicated step rather than rushing it in here.
 
+## Daily Video Ideas — done (priority 2 of 4)
+
+- `/api/ai/ideas` — two modes:
+  - **Personalized**: reuses the same 15-min channel-context cache the Channel Audit chat uses
+    (`ai:channel-context:<userId>` in `ai/channel-context.ts`) — real recent-video and stats
+    grounding, no new YouTube API cost if the chat already warmed the cache this session.
+  - **Trending**: grounds on a topic's free autocomplete suggestions (no quota cost at all).
+- Both run through `runAI()` on the user's own key — **not ad-gated**, same reasoning as the rest
+  of AI Tools: this costs Yoinsta nothing, and ideas are the kind of thing people want to regenerate
+  a lot, so gating each generation behind an ad would be bad UX for something free to run.
+- `/dashboard/ideas` — tabbed like AI Tools (Personalized / Trending), each a one-button generate
+  flow reusing the same numbered-list parsing as the Title Generator.
+
+**Next up (priorities 3–4):** AI Thumbnail Generator (new image-gen capability), then
+Rising/Trending Keywords (needs a time-series store).
+
 ## Outlier Video Finder — done (priority 1 of 4)
 
 - `lib/youtube.ts` → `findOutlierVideos()` — searches a topic (`search.list`, `order=viewCount`),

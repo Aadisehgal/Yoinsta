@@ -9,6 +9,7 @@ import {
   Gauge,
   Users,
   Sparkles,
+  Lightbulb,
   Instagram,
   Settings,
 } from "lucide-react";
@@ -21,6 +22,7 @@ const NAV_ITEMS = [
   { href: "/dashboard/seo", label: "SEO Tools", icon: Gauge },
   { href: "/dashboard/competitors", label: "Competitors", icon: Users },
   { href: "/dashboard/ai-tools", label: "AI Tools", icon: Sparkles },
+  { href: "/dashboard/ideas", label: "Daily Ideas", icon: Lightbulb },
   { href: "/dashboard/instagram", label: "Instagram", icon: Instagram },
   { href: "/dashboard/settings", label: "Settings", icon: Settings },
 ];
