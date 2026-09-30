@@ -4,16 +4,58 @@ import { useState } from "react";
 import { Card, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 
+interface VideoInfo {
+  title: string;
+  channel: string;
+  avatarUrl: string | null;
+}
+
 interface ThumbnailResult {
   success: boolean;
   base64?: string;
   mimeType?: string;
   provider?: string;
-  videoTitle?: string;
+  video?: VideoInfo;
   error?: string;
 }
 
 const FIELD_CLASS = "w-full rounded-md border border-border bg-ink-950 px-3 py-2";
+
+// Channel icon with a letter-badge fallback, so the slot is never empty or broken.
+function ChannelIcon({ src, name }: { src: string | null; name: string }) {
+  const [failed, setFailed] = useState(false);
+
+  if (!src || failed) {
+    return (
+      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-ink-800 text-sm font-medium text-white">
+        {(Array.from(name.trim())[0] ?? "?").toUpperCase()}
+      </div>
+    );
+  }
+
+  return (
+    // eslint-disable-next-line @next/next/no-img-element -- channel icon from YouTube's image host, next/image would need extra config
+    <img
+      src={src}
+      alt=""
+      referrerPolicy="no-referrer"
+      onError={() => setFailed(true)}
+      className="h-10 w-10 shrink-0 rounded-full object-cover"
+    />
+  );
+}
+
+function VideoRow({ video }: { video: VideoInfo }) {
+  return (
+    <div className="flex items-center gap-3">
+      <ChannelIcon src={video.avatarUrl} name={video.channel} />
+      <div className="min-w-0">
+        <p className="truncate text-sm font-medium">{video.title}</p>
+        <p className="truncate text-xs text-muted">{video.channel}</p>
+      </div>
+    </div>
+  );
+}
 
 export default function ThumbnailsPage() {
   const [videoUrl, setVideoUrl] = useState("");
@@ -88,18 +130,28 @@ export default function ThumbnailsPage() {
         {result?.error && <p className="mt-3 text-sm text-red-400">{result.error}</p>}
       </Card>
 
+      {result?.video && !dataUrl && (
+        <Card>
+          <VideoRow video={result.video} />
+        </Card>
+      )}
+
       {dataUrl && (
         <Card>
           <div className="flex items-center justify-between">
             <CardTitle>Result</CardTitle>
             <span className="text-xs text-muted">via {result?.provider}</span>
           </div>
-          {result?.videoTitle && <CardDescription>For: {result.videoTitle}</CardDescription>}
           {result?.provider === "openai" && (
             <CardDescription>1536×1024 — crop to 16:9 in your thumbnail if needed.</CardDescription>
           )}
           {/* eslint-disable-next-line @next/next/no-img-element -- base64 data URL, next/image can't optimize this */}
           <img src={dataUrl} alt="Generated thumbnail" className="mt-4 w-full rounded-md border border-border" />
+          {result?.video && (
+            <div className="mt-4">
+              <VideoRow video={result.video} />
+            </div>
+          )}
           <a
             href={dataUrl}
             download="yoinsta-thumbnail.png"

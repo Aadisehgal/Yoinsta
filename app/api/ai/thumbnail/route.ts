@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { generateImage } from "@/ai/image-router";
-import { extractVideoId, fetchVideoMeta } from "@/lib/video-link";
+import { extractVideoId, fetchChannelIcon, fetchVideoMeta, type VideoMeta } from "@/lib/video-link";
 
 // Image generation is slow: up to 8s video lookup + 45s provider timeout.
 export const maxDuration = 60;
@@ -27,18 +27,17 @@ export async function POST(req: Request) {
   const provider = typeof body.provider === "string" ? body.provider : undefined;
 
   let prompt = extra;
-  let videoTitle: string | undefined;
+  let meta: VideoMeta | null = null;
 
   if (videoUrl) {
     const videoId = extractVideoId(videoUrl);
     if (!videoId) {
       return NextResponse.json({ error: "That doesn't look like a YouTube video link." }, { status: 400 });
     }
-    const meta = await fetchVideoMeta(videoId);
+    meta = await fetchVideoMeta(videoId);
     if (!meta) {
       return NextResponse.json({ error: "Couldn't read that video — check the link and make sure it's public." }, { status: 400 });
     }
-    videoTitle = meta.title;
     prompt = buildVideoPrompt(meta.title, meta.channel, extra);
   }
 
@@ -46,6 +45,12 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Paste a video link or describe the thumbnail." }, { status: 400 });
   }
 
-  const result = await generateImage(session.user.id, prompt + THUMBNAIL_STYLE_SUFFIX, provider);
-  return NextResponse.json({ ...result, videoTitle });
+  // The channel icon lookup runs alongside image generation, so it adds no waiting time.
+  const [result, avatarUrl] = await Promise.all([
+    generateImage(session.user.id, prompt + THUMBNAIL_STYLE_SUFFIX, provider),
+    meta ? fetchChannelIcon(meta.id, meta.channelUrl) : Promise.resolve(null),
+  ]);
+
+  const video = meta ? { title: meta.title, channel: meta.channel, avatarUrl } : undefined;
+  return NextResponse.json({ ...result, video });
 }
