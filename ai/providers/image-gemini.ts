@@ -1,6 +1,6 @@
 import type { GeneratedImage } from "./image-openai";
 
-const MODEL = process.env.GEMINI_IMAGE_MODEL ?? "gemini-2.5-flash-image";
+const MODEL = process.env.GEMINI_IMAGE_MODEL ?? "gemini-3.1-flash-image";
 
 export async function generateImageGemini(apiKey: string, prompt: string): Promise<GeneratedImage> {
   const res = await fetch(
