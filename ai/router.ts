@@ -16,7 +16,10 @@ const CHAT_TIMEOUT_MS = 50_000;
  * key or account details.
  */
 function describeFailure(label: string, err: unknown): string {
-  const e = err as { message?: string; status?: number } | undefined;
+  const e = err as { message?: string; status?: number; detail?: string } | undefined;
+  // `detail` is built by our own provider code (model names + status codes only) — safe to show.
+  const trail = typeof e?.detail === "string" && e.detail ? ` [${e.detail}]` : "";
+
   if (e?.message === "TIMEOUT") {
     return `${label} took too long to answer. Try again, or ask something shorter.`;
   }
@@ -25,19 +28,19 @@ function describeFailure(label: string, err: unknown): string {
   }
   const status = typeof e?.status === "number" ? e.status : undefined;
   if (status === 401 || status === 403) {
-    return `${label} rejected your API key (HTTP ${status}). Re-check the key in Settings.`;
+    return `${label} rejected your API key (HTTP ${status}). Re-check the key in Settings.${trail}`;
   }
   if (status === 404) {
-    return `${label} couldn't find the model this app asked for (HTTP 404). The app needs a model update.`;
+    return `${label} couldn't find the model this app asked for (HTTP 404). The app needs a model update.${trail}`;
   }
   if (status === 429) {
-    return `${label} rate limit or quota reached (HTTP 429). Wait a minute, or check your ${label} plan limits.`;
+    return `${label} rate limit or quota reached (HTTP 429). Wait a minute, or check your ${label} plan limits.${trail}`;
   }
   if (status === 400) {
-    return `${label} rejected the request (HTTP 400).`;
+    return `${label} rejected the request (HTTP 400).${trail}`;
   }
   if (status !== undefined && status >= 500) {
-    return `${label} is having trouble right now (HTTP ${status}). Try again shortly.`;
+    return `${label} is busy or down on its side (HTTP ${status}) — not a problem with your key. Try again in a minute.${trail}`;
   }
   return `Your ${label} API key failed. Check key/limits in Settings.`;
 }
