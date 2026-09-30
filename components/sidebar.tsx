@@ -10,6 +10,7 @@ import {
   Users,
   Sparkles,
   Lightbulb,
+  Image as ImageIcon,
   Instagram,
   Settings,
 } from "lucide-react";
@@ -23,6 +24,7 @@ const NAV_ITEMS = [
   { href: "/dashboard/competitors", label: "Competitors", icon: Users },
   { href: "/dashboard/ai-tools", label: "AI Tools", icon: Sparkles },
   { href: "/dashboard/ideas", label: "Daily Ideas", icon: Lightbulb },
+  { href: "/dashboard/thumbnails", label: "Thumbnails", icon: ImageIcon },
   { href: "/dashboard/instagram", label: "Instagram", icon: Instagram },
   { href: "/dashboard/settings", label: "Settings", icon: Settings },
 ];
