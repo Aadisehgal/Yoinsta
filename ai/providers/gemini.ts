@@ -3,7 +3,7 @@ import type { ChatMessage } from "../types";
 
 export async function callGemini(apiKey: string, prompt: string): Promise<string> {
   const client = new GoogleGenerativeAI(apiKey);
-  const model = client.getGenerativeModel({ model: "gemini-1.5-flash" }); // update as Google's lineup changes
+  const model = client.getGenerativeModel({ model: process.env.GEMINI_TEXT_MODEL ?? "gemini-flash-latest" }); // update as Google's lineup changes
 
   const result = await model.generateContent(prompt);
   return result.response.text();
@@ -11,7 +11,7 @@ export async function callGemini(apiKey: string, prompt: string): Promise<string
 
 export async function chatGemini(apiKey: string, systemPrompt: string, messages: ChatMessage[]): Promise<string> {
   const client = new GoogleGenerativeAI(apiKey);
-  const model = client.getGenerativeModel({ model: "gemini-1.5-flash", systemInstruction: systemPrompt });
+  const model = client.getGenerativeModel({ model: process.env.GEMINI_TEXT_MODEL ?? "gemini-flash-latest", systemInstruction: systemPrompt });
 
   const history = messages.slice(0, -1).map((m) => ({
     role: m.role === "assistant" ? "model" : "user",
