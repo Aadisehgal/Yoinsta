@@ -5,6 +5,7 @@ const nextConfig = {
     remotePatterns: [
       { protocol: "https", hostname: "lh3.googleusercontent.com" }, // Google avatars
       { protocol: "https", hostname: "yt3.googleusercontent.com" }, // YouTube channel thumbnails
+      { protocol: "https", hostname: "yt3.ggpht.com" },
       { protocol: "https", hostname: "i.ytimg.com" }, // YouTube video thumbnails
       { protocol: "https", hostname: "scontent.cdninstagram.com" }, // Instagram media (Phase 3)
     ],
