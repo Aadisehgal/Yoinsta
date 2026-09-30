@@ -2,14 +2,17 @@
 
 import { useSession, signOut } from "next-auth/react";
 import Image from "next/image";
+import { MobileNav } from "@/components/mobile-nav";
 
 export function Topbar() {
   const { data: session } = useSession();
   if (!session) return null;
 
   return (
-    <header className="flex h-16 items-center justify-between border-b border-border px-6">
-      <div />
+    <header className="flex h-16 items-center justify-between border-b border-border px-4 md:px-6">
+      <div>
+        <MobileNav />
+      </div>
       <div className="flex items-center gap-4">
         <span className="rounded-full border border-border px-3 py-1 text-xs text-muted">
           {session.user.adFree ? "Ad-free" : "Free · supported by ads"}
