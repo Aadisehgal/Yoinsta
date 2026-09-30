@@ -27,7 +27,7 @@ async function generate(apiKey: string, contents: GeminiContent[], systemPrompt?
   const data = await res.json();
   const parts: { text?: string }[] = data?.candidates?.[0]?.content?.parts ?? [];
   const text = parts.map((p) => p.text ?? "").join("");
-  if (!text) throw new Error("Gemini returned no text.");
+  if (!text) throw new Error("EMPTY_RESPONSE");
   return text;
 }
 

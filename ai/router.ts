@@ -7,6 +7,40 @@ import { callClaude, chatClaude } from "./providers/claude";
 import type { AIResponse, ChatMessage } from "./types";
 
 const CALL_TIMEOUT_MS = 20_000;
+// Channel-audit prompts are much bigger, and newer Gemini models "think" before answering.
+const CHAT_TIMEOUT_MS = 50_000;
+
+/**
+ * Turns a provider failure into a message that says what actually went wrong, using
+ * only the HTTP status / a timeout marker — never the raw error text, which can echo
+ * key or account details.
+ */
+function describeFailure(label: string, err: unknown): string {
+  const e = err as { message?: string; status?: number } | undefined;
+  if (e?.message === "TIMEOUT") {
+    return `${label} took too long to answer. Try again, or ask something shorter.`;
+  }
+  if (e?.message === "EMPTY_RESPONSE") {
+    return `${label} sent back an empty answer. Try rephrasing your question.`;
+  }
+  const status = typeof e?.status === "number" ? e.status : undefined;
+  if (status === 401 || status === 403) {
+    return `${label} rejected your API key (HTTP ${status}). Re-check the key in Settings.`;
+  }
+  if (status === 404) {
+    return `${label} couldn't find the model this app asked for (HTTP 404). The app needs a model update.`;
+  }
+  if (status === 429) {
+    return `${label} rate limit or quota reached (HTTP 429). Wait a minute, or check your ${label} plan limits.`;
+  }
+  if (status === 400) {
+    return `${label} rejected the request (HTTP 400).`;
+  }
+  if (status !== undefined && status >= 500) {
+    return `${label} is having trouble right now (HTTP ${status}). Try again shortly.`;
+  }
+  return `Your ${label} API key failed. Check key/limits in Settings.`;
+}
 
 export const PROVIDER_LABEL: Record<string, string> = {
   groq: "Groq",
@@ -65,14 +99,15 @@ export async function callProvider(
   try {
     const content = await withTimeout(fn(apiKey, prompt), CALL_TIMEOUT_MS);
     return { success: true, content, provider };
-  } catch {
-    // Intentionally swallow the raw error — it can echo back key/account details.
-    // Never log it anywhere (spec section 4, rule: "Never log key material").
+  } catch (err) {
+    // Intentionally never surface or log the raw error — it can echo back key/account
+    // details (spec section 4, rule: "Never log key material"). Only the HTTP status
+    // / timeout marker is used to pick a message.
     return {
       success: false,
       content: "",
       provider,
-      error: `Your ${label} API key failed. Check key/limits in Settings.`,
+      error: describeFailure(label, err),
     };
   }
 }
@@ -127,14 +162,14 @@ export async function callProviderChat(
   }
 
   try {
-    const content = await withTimeout(fn(apiKey, systemPrompt, messages), CALL_TIMEOUT_MS);
+    const content = await withTimeout(fn(apiKey, systemPrompt, messages), CHAT_TIMEOUT_MS);
     return { success: true, content, provider };
-  } catch {
+  } catch (err) {
     return {
       success: false,
       content: "",
       provider,
-      error: `Your ${label} API key failed. Check key/limits in Settings.`,
+      error: describeFailure(label, err),
     };
   }
 }

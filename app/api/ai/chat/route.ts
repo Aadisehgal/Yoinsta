@@ -7,6 +7,9 @@ import { buildChannelContext } from "@/ai/channel-context";
 import { getUserAccessToken } from "@/lib/youtube";
 import type { ChatMessage } from "@/ai/types";
 
+// Chat prompts carry the whole channel context — give the function room to finish (Vercel Hobby max is 60s).
+export const maxDuration = 60;
+
 function buildSystemPrompt(context: string): string {
   return [
     "You are Yoinsta's YouTube growth coach. You have REAL data for this creator's channel below —",
