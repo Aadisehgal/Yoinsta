@@ -7,7 +7,9 @@ import { buildYouTubeAuthUrl } from "@/lib/youtube";
 export async function GET() {
   const session = await getServerSession(authOptions);
   if (!session) {
-    return NextResponse.redirect(new URL("/login", process.env.NEXTAUTH_URL as string));
+    return NextResponse.redirect(
+      new URL("/login?callbackUrl=%2Fapi%2Fyoutube%2Fconnect", process.env.NEXTAUTH_URL as string)
+    );
   }
 
   const state = crypto.randomBytes(16).toString("hex");
