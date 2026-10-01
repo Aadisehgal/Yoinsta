@@ -7,6 +7,9 @@ const REDIRECT_URI = `${process.env.NEXTAUTH_URL}/api/youtube/callback`;
 const SCOPES = [
   "https://www.googleapis.com/auth/youtube.readonly",
   "https://www.googleapis.com/auth/yt-analytics.readonly",
+  // Lets Yoinsta edit titles / descriptions / tags / visibility and set thumbnails (videos.update,
+  // thumbnails.set). Channels connected before this was added must reconnect once to grant it.
+  "https://www.googleapis.com/auth/youtube.force-ssl",
 ].join(" ");
 
 export function buildYouTubeAuthUrl(state: string): string {

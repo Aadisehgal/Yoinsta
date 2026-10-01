@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { NAV_ITEMS } from "@/components/nav-items";
+import { NAV_ITEMS, isNavActive } from "@/components/nav-items";
 import { cn } from "@/lib/utils";
 
 export function Sidebar() {
@@ -16,7 +16,7 @@ export function Sidebar() {
 
       <nav className="mt-8 flex flex-col gap-1">
         {NAV_ITEMS.map(({ href, label, icon: Icon }) => {
-          const active = pathname === href;
+          const active = isNavActive(pathname, href);
           return (
             <Link
               key={href}

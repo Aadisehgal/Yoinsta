@@ -5,7 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { signOut } from "next-auth/react";
 import { LogOut, Menu, X } from "lucide-react";
-import { NAV_ITEMS } from "@/components/nav-items";
+import { NAV_ITEMS, isNavActive } from "@/components/nav-items";
 import { cn } from "@/lib/utils";
 
 // Phone-sized screens (< 768px) have no sidebar, so this drawer carries every menu item.
@@ -54,7 +54,7 @@ export function MobileNav() {
 
             <nav className="mt-6 flex flex-1 flex-col gap-1 overflow-y-auto">
               {NAV_ITEMS.map(({ href, label, icon: Icon }) => {
-                const active = pathname === href;
+                const active = isNavActive(pathname, href);
                 return (
                   <Link
                     key={href}
