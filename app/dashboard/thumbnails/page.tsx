@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Card, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { copyText } from "@/lib/copy-text";
 
 interface VideoInfo {
   title: string;
@@ -62,6 +63,36 @@ export default function ThumbnailsPage() {
   const [prompt, setPrompt] = useState("");
   const [result, setResult] = useState<ThumbnailResult | null>(null);
   const [loading, setLoading] = useState(false);
+  const [promptLoading, setPromptLoading] = useState(false);
+  const [promptResult, setPromptResult] = useState<{ prompt: string; textOptions: string[] } | null>(null);
+  const [promptError, setPromptError] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+
+  async function handlePromptOnly() {
+    setPromptLoading(true);
+    setPromptError(null);
+    setPromptResult(null);
+    try {
+      const res = await fetch("/api/ai/thumbnail-prompt", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ videoUrl, prompt }),
+      });
+      const data = await res.json().catch(() => null);
+      if (data?.success) setPromptResult({ prompt: data.prompt, textOptions: data.textOptions ?? [] });
+      else setPromptError(data?.error ?? "Couldn't write the prompt right now. Try again.");
+    } catch {
+      setPromptError("Couldn't reach the server — check your connection and try again.");
+    } finally {
+      setPromptLoading(false);
+    }
+  }
+
+  async function handleCopy(text: string) {
+    const ok = await copyText(text);
+    setCopied(ok);
+    setTimeout(() => setCopied(false), 1800);
+  }
 
   async function handleGenerate(e: React.FormEvent) {
     e.preventDefault();
@@ -119,9 +150,14 @@ export default function ThumbnailsPage() {
             rows={3}
             className={FIELD_CLASS}
           />
-          <Button type="submit" disabled={!canSubmit}>
-            {loading ? "Generating… (can take a bit)" : "Generate thumbnail"}
-          </Button>
+          <div className="flex flex-wrap gap-3">
+            <Button type="submit" disabled={!canSubmit || promptLoading}>
+              {loading ? "Generating… (can take a bit)" : "Generate thumbnail"}
+            </Button>
+            <Button type="button" variant="secondary" onClick={handlePromptOnly} disabled={!canSubmit || promptLoading}>
+              {promptLoading ? "Writing prompt…" : "Get a prompt instead"}
+            </Button>
+          </div>
         </form>
         <p className="mt-3 text-xs text-muted">
           Heads up: image generation uses more of your provider&apos;s credits than text — check
@@ -129,6 +165,40 @@ export default function ThumbnailsPage() {
         </p>
         {result?.error && <p className="mt-3 text-sm text-red-400">{result.error}</p>}
       </Card>
+
+      {(promptResult || promptError) && (
+        <Card className="space-y-3">
+          <CardTitle>Image prompt</CardTitle>
+          {promptError && <p className="text-sm text-red-400">{promptError}</p>}
+          {promptResult && (
+            <>
+              <CardDescription>
+                Paste this into the Gemini app (free) or any image tool, then upload the picture in Videos → your
+                video → Thumbnail.
+              </CardDescription>
+              <p className="whitespace-pre-wrap rounded-md bg-ink-800 p-3 text-sm">{promptResult.prompt}</p>
+              <Button type="button" size="sm" variant="secondary" onClick={() => handleCopy(promptResult.prompt)}>
+                {copied ? "Copied ✓" : "Copy prompt"}
+              </Button>
+              {promptResult.textOptions.length > 0 && (
+                <div>
+                  <p className="text-xs uppercase tracking-wide text-muted">Text to add afterwards</p>
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {promptResult.textOptions.map((t) => (
+                      <span key={t} className="rounded-full bg-ink-800 px-3 py-1 text-xs">
+                        {t}
+                      </span>
+                    ))}
+                  </div>
+                  <p className="mt-2 text-xs text-muted">
+                    Add the words yourself in any editor — image generators often misspell text.
+                  </p>
+                </div>
+              )}
+            </>
+          )}
+        </Card>
+      )}
 
       {result?.video && !dataUrl && (
         <Card>

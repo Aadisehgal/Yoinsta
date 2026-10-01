@@ -40,12 +40,12 @@ export function extractJsonObject(text: string): unknown | null {
   return null;
 }
 
-const asObject = (v: unknown): Record<string, unknown> =>
+export const asObject = (v: unknown): Record<string, unknown> =>
   v && typeof v === "object" && !Array.isArray(v) ? (v as Record<string, unknown>) : {};
 
-const asString = (v: unknown, max = 600): string => (typeof v === "string" ? v.trim().slice(0, max) : "");
+export const asString = (v: unknown, max = 600): string => (typeof v === "string" ? v.trim().slice(0, max) : "");
 
-const asStringList = (v: unknown, maxItems: number, maxLen = 300): string[] =>
+export const asStringList = (v: unknown, maxItems: number, maxLen = 300): string[] =>
   Array.isArray(v)
     ? v
         .map((x) => asString(x, maxLen))
@@ -53,12 +53,12 @@ const asStringList = (v: unknown, maxItems: number, maxLen = 300): string[] =>
         .slice(0, maxItems)
     : [];
 
-const asScore = (v: unknown, fallback = 0): number => {
+export const asScore = (v: unknown, fallback = 0): number => {
   const n = typeof v === "number" ? v : Number(v);
   return Number.isFinite(n) ? Math.max(0, Math.min(100, Math.round(n))) : fallback;
 };
 
-function asVerdict(v: unknown, score: number): Verdict {
+export function asVerdict(v: unknown, score: number): Verdict {
   if (v === "good" || v === "ok" || v === "weak") return v;
   return score >= 75 ? "good" : score >= 50 ? "ok" : "weak";
 }
@@ -224,7 +224,7 @@ export const ANALYSIS_SYSTEM_PROMPT = [
   "Reply with ONE JSON object and nothing else — no markdown, no code fences, no commentary.",
 ].join(" ");
 
-const LANG_RULE: Record<Lang, string> = {
+export const LANG_RULE: Record<Lang, string> = {
   hinglish:
     "Write every explanation (summary, reasons, issues, quickWins, tag reasons) in simple Hinglish — Hindi in English letters, short sentences. Keep title suggestions, the improved description and tags in the same language as the video's current title.",
   english:

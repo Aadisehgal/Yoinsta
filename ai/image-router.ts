@@ -29,10 +29,13 @@ function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
   });
 }
 
-function friendlyError(label: string, err: unknown): string {
+function friendlyError(provider: string, label: string, err: unknown): string {
   if (err instanceof Error && err.message === "TIMEOUT") return `${label} took too long to generate the image — try again.`;
   const status = (err as { status?: number })?.status;
   if (status === 401 || status === 403) return `Your ${label} API key was rejected — check it in Settings.`;
+  if (status === 429 && provider === "gemini") {
+    return "Gemini image generation isn't included in free API keys — Google gives free keys no quota for image models. Turn on billing in Google AI Studio or add an OpenAI key. Or tap \"Get a prompt instead\" and paste it into the Gemini app, which is free.";
+  }
   if (status === 429) return `${label} rate-limited or out of image credits — check your usage/billing there.`;
   return `${label} couldn't generate that image right now.`;
 }
@@ -58,6 +61,6 @@ export async function generateImage(userId: string, prompt: string, provider?: s
     const { base64, mimeType } = await withTimeout(IMAGE_DISPATCH[key.provider](plainKey, prompt), IMAGE_TIMEOUT_MS);
     return { success: true, base64, mimeType, provider: key.provider };
   } catch (err) {
-    return { success: false, provider: key.provider, error: friendlyError(label, err) };
+    return { success: false, provider: key.provider, error: friendlyError(key.provider, label, err) };
   }
 }

@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Card, CardDescription, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { AnalysisPanel } from "@/components/video/analysis-panel";
+import { SceneReviewPanel } from "@/components/video/scene-review-panel";
 import { NoticeBox, type Notice } from "@/components/video/notice-box";
 import { cn } from "@/lib/utils";
 import {
@@ -379,20 +380,31 @@ export function VideoEditor({ videoId }: { videoId: string }) {
         onUseDescription={setDescription}
         onRemoveTags={(list) => {
           const drop = new Set(list.map((t) => t.toLowerCase()));
-          setTags((prev) => prev.filter((t) => !drop.has(t.toLowerCase())));
+          const next = tags.filter((t) => !drop.has(t.toLowerCase()));
+          setTags(next);
+          return tags.length - next.length;
         }}
-        onAddTags={(list) =>
-          setTags((prev) => {
-            // Add one at a time so we stop before passing YouTube's 500-character limit.
-            let next = prev;
-            for (const tag of list) {
-              const candidate = cleanTags([...next, tag]);
-              if (tagsLength(candidate) <= TAGS_MAX_CHARS) next = candidate;
+        onAddTags={(list) => {
+          // One at a time, so we stop before passing YouTube's 500-character limit — and say so.
+          let next = tags;
+          let added = 0;
+          let skipped = 0;
+          for (const tag of list) {
+            const candidate = cleanTags([...next, tag]);
+            if (candidate.length === next.length) continue; // already there
+            if (tagsLength(candidate) <= TAGS_MAX_CHARS) {
+              next = candidate;
+              added += 1;
+            } else {
+              skipped += 1;
             }
-            return next;
-          })
-        }
+          }
+          setTags(next);
+          return { added, skipped };
+        }}
       />
+
+      <SceneReviewPanel videoId={current.id} isPublic={current.privacyStatus === "public"} privacy={current.privacyStatus} />
 
       <Card className="space-y-4">
         <div>
@@ -457,7 +469,7 @@ export function VideoEditor({ videoId }: { videoId: string }) {
 
       <div className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-ink-950/95 px-4 py-3 backdrop-blur md:left-60">
         <div className="mx-auto flex max-w-2xl flex-col gap-2">
-          {saveNotice && <NoticeBox notice={saveNotice} />}
+          {saveNotice && !(saveNotice.kind === "ok" && dirty) && <NoticeBox notice={saveNotice} />}
           {confirmPublish && (
             <div className="rounded-md bg-amber-500/10 px-3 py-2 text-sm text-amber-200">
               <p>This will make the video public right away.</p>

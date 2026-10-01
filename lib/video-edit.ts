@@ -263,6 +263,59 @@ export function buildUpdatePayload(current: EditableVideo, req: EditRequest): Up
   return { parts, body };
 }
 
+/** What the video would look like if YouTube applied exactly what we asked for. */
+function applyRequest(current: EditableVideo, req: EditRequest): EditableVideo {
+  const next: EditableVideo = { ...current };
+  if (req.title !== undefined) next.title = req.title;
+  if (req.description !== undefined) next.description = req.description;
+  if (req.tags !== undefined) next.tags = req.tags;
+  if (req.visibility) {
+    const { mode, publishAt } = req.visibility;
+    next.privacyStatus = mode === "schedule" ? "private" : mode;
+    next.publishAt = mode === "schedule" ? (publishAt ?? null) : null;
+  }
+  return next;
+}
+
+/**
+ * videos.update answers with the video as YouTube stored it (only the parts we sent). Overlaying
+ * that onto what we had gives the saved state without a second read — a read right after a write
+ * can briefly return the OLD data, which would make the form snap back and look like the save
+ * failed. If the answer is missing a part entirely, we fall back to what we asked for.
+ */
+export function applyUpdateResponse(
+  current: EditableVideo,
+  raw: RawVideoItem | null | undefined,
+  request?: EditRequest
+): EditableVideo {
+  const next = request ? applyRequest(current, request) : { ...current };
+
+  const sn = raw?.snippet;
+  if (sn) {
+    if (typeof sn.title === "string") next.title = sn.title;
+    next.description = typeof sn.description === "string" ? sn.description : "";
+    next.tags = Array.isArray(sn.tags) ? sn.tags.filter((t) => typeof t === "string") : [];
+    if (typeof sn.categoryId === "string") next.categoryId = sn.categoryId;
+    next.defaultLanguage = sn.defaultLanguage ?? current.defaultLanguage;
+    next.defaultAudioLanguage = sn.defaultAudioLanguage ?? current.defaultAudioLanguage;
+    const thumb = bestThumbnail(sn.thumbnails);
+    if (thumb) next.thumbnail = thumb;
+  }
+
+  const st = raw?.status;
+  if (st) {
+    if (st.privacyStatus === "public" || st.privacyStatus === "unlisted" || st.privacyStatus === "private") {
+      next.privacyStatus = st.privacyStatus;
+    }
+    next.publishAt = st.publishAt ?? null;
+    if (typeof st.license === "string") next.license = st.license;
+    if (typeof st.embeddable === "boolean") next.embeddable = st.embeddable;
+    if (typeof st.publicStatsViewable === "boolean") next.publicStatsViewable = st.publicStatsViewable;
+    if (typeof st.selfDeclaredMadeForKids === "boolean") next.selfDeclaredMadeForKids = st.selfDeclaredMadeForKids;
+  }
+  return next;
+}
+
 // ---------------------------------------------------------------- thumbnails
 
 /** Reads the file's first bytes instead of trusting the browser-supplied type. */

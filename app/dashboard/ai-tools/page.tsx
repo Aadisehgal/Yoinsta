@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Card, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { MarkdownText } from "@/components/markdown-text";
 import { cn } from "@/lib/utils";
 
 type Tab = "chat" | "titles";
@@ -83,19 +84,24 @@ function ChannelAuditChat() {
     setLoading(true);
     setError(null);
 
-    const res = await fetch("/api/ai/chat", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ messages: next }),
-    });
-    const data = await res.json();
+    try {
+      const res = await fetch("/api/ai/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ messages: next }),
+      });
+      const data = await res.json().catch(() => null);
 
-    if (data.success) {
-      setMessages([...next, { role: "assistant" as const, content: data.content }]);
-    } else {
-      setError(data.error ?? "Something went wrong.");
+      if (data?.success) {
+        setMessages([...next, { role: "assistant" as const, content: data.content }]);
+      } else {
+        setError(data?.error ?? "The server took too long or failed. Please try again.");
+      }
+    } catch {
+      setError("Couldn't reach the server — check your connection and try again.");
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   }
 
   function handleSubmit(e: React.FormEvent) {
@@ -131,11 +137,11 @@ function ChannelAuditChat() {
               key={i}
               className={
                 m.role === "user"
-                  ? "ml-8 rounded-lg bg-saffron-500/10 px-4 py-2 text-sm"
-                  : "mr-8 whitespace-pre-wrap rounded-lg border border-border bg-ink-900 px-4 py-2 text-sm"
+                  ? "ml-8 whitespace-pre-wrap rounded-lg bg-saffron-500/10 px-4 py-2 text-sm"
+                  : "mr-8 rounded-lg border border-border bg-ink-900 px-4 py-3 text-sm leading-relaxed"
               }
             >
-              {m.content}
+              {m.role === "user" ? m.content : <MarkdownText text={m.content} />}
             </div>
           ))}
           {loading && <p className="text-sm text-muted">Analyzing your channel…</p>}

@@ -1,4 +1,11 @@
-import { normalizeVideo, buildUpdatePayload, type EditableVideo, type EditRequest, type RawVideoItem } from "@/lib/video-edit";
+import {
+  applyUpdateResponse,
+  buildUpdatePayload,
+  normalizeVideo,
+  type EditableVideo,
+  type EditRequest,
+  type RawVideoItem,
+} from "@/lib/video-edit";
 
 const API = "https://www.googleapis.com/youtube/v3";
 
@@ -97,22 +104,19 @@ export async function getEditableVideo(accessToken: string, videoId: string): Pr
   return normalizeVideo(data.items?.[0]);
 }
 
-/** Applies the edit (50 quota units), then re-reads the video so the caller gets the saved state. */
+/** Applies the edit (50 quota units) and returns the video as YouTube says it is now stored. */
 export async function updateVideo(
   accessToken: string,
   current: EditableVideo,
   request: EditRequest
 ): Promise<EditableVideo> {
   const { parts, body } = buildUpdatePayload(current, request);
-  await ytFetch<unknown>(accessToken, `${API}/videos?part=${parts.join(",")}`, {
+  const saved = await ytFetch<RawVideoItem>(accessToken, `${API}/videos?part=${parts.join(",")}`, {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
-
-  const saved = await getEditableVideo(accessToken, current.id);
-  if (!saved) throw new YouTubeApiError(404, "videoNotFound");
-  return saved;
+  return applyUpdateResponse(current, saved, request);
 }
 
 /** Uploads a custom thumbnail (50 quota units). Returns the new thumbnail URL when YouTube sends one. */

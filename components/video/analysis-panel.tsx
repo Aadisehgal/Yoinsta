@@ -6,6 +6,7 @@ import { Card, CardDescription, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { NoticeBox, type Notice } from "@/components/video/notice-box";
 import { cn } from "@/lib/utils";
+import { TAGS_MAX_CHARS, tagsLength } from "@/lib/video-edit";
 import type { Lang, Verdict, VideoAnalysis } from "@/lib/video-analysis";
 
 interface SeoSection {
@@ -27,8 +28,10 @@ interface Props {
   draft: { title: string; description: string; tags: string[] };
   onUseTitle: (title: string) => void;
   onUseDescription: (description: string) => void;
-  onRemoveTags: (tags: string[]) => void;
-  onAddTags: (tags: string[]) => void;
+  /** Returns how many tags were actually removed. */
+  onRemoveTags: (tags: string[]) => number;
+  /** Returns how many tags were added and how many didn't fit YouTube's 500-character limit. */
+  onAddTags: (tags: string[]) => { added: number; skipped: number };
 }
 
 const VERDICT_STYLE: Record<Verdict, string> = {
@@ -63,10 +66,37 @@ export function AnalysisPanel({ videoId, draft, onUseTitle, onUseDescription, on
   const [loading, setLoading] = useState(false);
   const [notice, setNotice] = useState<Notice | null>(null);
   const [result, setResult] = useState<AnalysisResponse | null>(null);
+  const [tagMsg, setTagMsg] = useState<string | null>(null);
+
+  // What the tag list looks like RIGHT NOW (unsaved edits included) — drives the "Added ✓" / "Removed ✓" states.
+  const have = new Set(draft.tags.map((t) => t.toLowerCase()));
+  const used = tagsLength(draft.tags);
+
+  function removeTags(list: string[]) {
+    const removed = onRemoveTags(list);
+    setTagMsg(
+      removed > 0
+        ? `Removed ${removed} tag${removed === 1 ? "" : "s"} from the form. Press Save to send it to YouTube.`
+        : "Those tags were already removed."
+    );
+  }
+
+  function addTags(list: string[]) {
+    const { added, skipped } = onAddTags(list);
+    const parts: string[] = [];
+    if (added > 0) parts.push(`Added ${added} tag${added === 1 ? "" : "s"} to the form. Press Save to send it to YouTube.`);
+    if (skipped > 0) {
+      parts.push(
+        `${skipped} didn't fit — YouTube allows ${TAGS_MAX_CHARS} characters of tags in total. Remove some tags first.`
+      );
+    }
+    setTagMsg(parts.length > 0 ? parts.join(" ") : "Those tags are already there.");
+  }
 
   async function analyze() {
     setLoading(true);
     setNotice(null);
+    setTagMsg(null);
     try {
       const res = await fetch("/api/ai/video-analysis", {
         method: "POST",
@@ -197,7 +227,14 @@ export function AnalysisPanel({ videoId, draft, onUseTitle, onUseDescription, on
           </section>
 
           <section className="space-y-4">
-            <h4 className="font-medium">Tags</h4>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <h4 className="font-medium">Tags</h4>
+              <span className={cn("text-xs", used > TAGS_MAX_CHARS ? "text-red-400" : "text-muted")}>
+                In the form now: {draft.tags.length} tags · {used}/{TAGS_MAX_CHARS} characters
+              </span>
+            </div>
+
+            {tagMsg && <p className="rounded-md bg-ink-800 px-3 py-2 text-sm">{tagMsg}</p>}
 
             {analysis.tags.remove.length > 0 && (
               <div>
@@ -207,23 +244,31 @@ export function AnalysisPanel({ videoId, draft, onUseTitle, onUseDescription, on
                     type="button"
                     size="sm"
                     variant="destructive"
-                    onClick={() => onRemoveTags(analysis.tags.remove.map((t) => t.tag))}
+                    disabled={analysis.tags.remove.every((t) => !have.has(t.tag.toLowerCase()))}
+                    onClick={() => removeTags(analysis.tags.remove.map((t) => t.tag))}
                   >
                     Remove all
                   </Button>
                 </div>
                 <div className="mt-2 space-y-2">
-                  {analysis.tags.remove.map((t) => (
-                    <div key={t.tag} className="flex items-start justify-between gap-3 rounded-md bg-ink-800 px-3 py-2">
-                      <div className="min-w-0">
-                        <p className="break-words text-sm">{t.tag}</p>
-                        {t.reason && <p className="text-xs text-muted">{t.reason}</p>}
+                  {analysis.tags.remove.map((t) => {
+                    const present = have.has(t.tag.toLowerCase());
+                    return (
+                      <div key={t.tag} className="flex items-start justify-between gap-3 rounded-md bg-ink-800 px-3 py-2">
+                        <div className="min-w-0">
+                          <p className={cn("break-words text-sm", !present && "text-muted line-through")}>{t.tag}</p>
+                          {t.reason && <p className="text-xs text-muted">{t.reason}</p>}
+                        </div>
+                        {present ? (
+                          <Button type="button" size="sm" variant="ghost" onClick={() => removeTags([t.tag])}>
+                            Remove
+                          </Button>
+                        ) : (
+                          <span className="shrink-0 pt-1 text-xs text-emerald-300">Removed ✓</span>
+                        )}
                       </div>
-                      <Button type="button" size="sm" variant="ghost" onClick={() => onRemoveTags([t.tag])}>
-                        Remove
-                      </Button>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
             )}
@@ -236,23 +281,31 @@ export function AnalysisPanel({ videoId, draft, onUseTitle, onUseDescription, on
                     type="button"
                     size="sm"
                     variant="secondary"
-                    onClick={() => onAddTags(analysis.tags.add.map((t) => t.tag))}
+                    disabled={analysis.tags.add.every((t) => have.has(t.tag.toLowerCase()))}
+                    onClick={() => addTags(analysis.tags.add.map((t) => t.tag))}
                   >
                     Add all
                   </Button>
                 </div>
                 <div className="mt-2 space-y-2">
-                  {analysis.tags.add.map((t) => (
-                    <div key={t.tag} className="flex items-start justify-between gap-3 rounded-md bg-ink-800 px-3 py-2">
-                      <div className="min-w-0">
-                        <p className="break-words text-sm">{t.tag}</p>
-                        {t.reason && <p className="text-xs text-muted">{t.reason}</p>}
+                  {analysis.tags.add.map((t) => {
+                    const present = have.has(t.tag.toLowerCase());
+                    return (
+                      <div key={t.tag} className="flex items-start justify-between gap-3 rounded-md bg-ink-800 px-3 py-2">
+                        <div className="min-w-0">
+                          <p className="break-words text-sm">{t.tag}</p>
+                          {t.reason && <p className="text-xs text-muted">{t.reason}</p>}
+                        </div>
+                        {present ? (
+                          <span className="shrink-0 pt-1 text-xs text-emerald-300">Added ✓</span>
+                        ) : (
+                          <Button type="button" size="sm" variant="ghost" onClick={() => addTags([t.tag])}>
+                            Add
+                          </Button>
+                        )}
                       </div>
-                      <Button type="button" size="sm" variant="ghost" onClick={() => onAddTags([t.tag])}>
-                        Add
-                      </Button>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
             )}

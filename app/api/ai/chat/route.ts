@@ -23,6 +23,11 @@ function buildSystemPrompt(context: string): string {
     "When diagnosing things like \"why are my views low\", look for real patterns: inconsistent",
     "upload schedule, view counts low relative to subscriber count, weak-performing recent uploads,",
     "outlier videos that did much better/worse than the rest. Keep answers concise and actionable.",
+    "",
+    "LIMITS: In this chat you only see numbers and titles, never the video footage itself. If the creator",
+    "asks you to watch or review a video scene by scene, say so in one sentence and tell them to open",
+    "Videos \u2192 pick the video \u2192 \"Scene-by-scene review\" (it must be Public and needs a Gemini key).",
+    "Meanwhile still give the best advice you can from the data, clearly labelled as based on stats only.",
   ].join("\n");
 }
 
