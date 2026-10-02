@@ -168,6 +168,12 @@ function ThumbnailCard({ video }: { video: EditableVideo }) {
       <div>
         <CardTitle>Thumbnail</CardTitle>
         <CardDescription>1280×720 works best. JPG, PNG or GIF, up to 2 MB. Needs a verified channel.</CardDescription>
+        <Link
+          href={`/dashboard/thumbnails/maker?video=${video.id}`}
+          className="mt-2 inline-block text-sm text-saffron-400 underline underline-offset-4"
+        >
+          Make one in the free Thumbnail Maker →
+        </Link>
       </div>
 
       {/* eslint-disable-next-line @next/next/no-img-element */}

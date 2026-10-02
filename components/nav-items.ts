@@ -10,6 +10,7 @@ import {
   Image as ImageIcon,
   Instagram,
   Settings,
+  Shield,
 } from "lucide-react";
 
 // Single source of truth for the menu — used by the desktop sidebar and the mobile drawer.
@@ -26,6 +27,9 @@ export const NAV_ITEMS = [
   { href: "/dashboard/instagram", label: "Instagram", icon: Instagram },
   { href: "/dashboard/settings", label: "Settings", icon: Settings },
 ];
+
+/** Only shown to accounts with the ADMIN role. */
+export const ADMIN_ITEM = { href: "/admin", label: "Admin", icon: Shield };
 
 /** Highlights a menu item for its own page and any page below it (e.g. /dashboard/videos/abc123). */
 export function isNavActive(pathname: string | null, href: string): boolean {

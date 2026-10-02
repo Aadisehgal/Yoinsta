@@ -166,12 +166,19 @@ export default function SettingsPage() {
       {!session?.user.adFree && (
         <Card>
           <CardTitle>Have a code?</CardTitle>
-          <CardDescription>Redeem an access code to remove ads permanently.</CardDescription>
+          <CardDescription>
+            Redeem an access code (looks like YOIN-XXXX-XXXX) to remove ads permanently. Codes are made by the admin.
+          </CardDescription>
           <form onSubmit={handleRedeem} className="mt-4 flex gap-2">
             <input
               value={redeemInput}
               onChange={(e) => setRedeemInput(e.target.value)}
               placeholder="YOIN-XXXX-XXXX"
+              autoCapitalize="characters"
+              autoCorrect="off"
+              autoComplete="off"
+              spellCheck={false}
+              aria-label="Access code"
               className="flex-1 rounded-md border border-border bg-ink-950 px-3 py-2 font-mono text-sm uppercase"
             />
             <Button type="submit" disabled={!redeemInput || redeemStatus.type === "testing"}>

@@ -1,4 +1,5 @@
 import type { ChatMessage } from "../types";
+import { discoverGeminiModels } from "./gemini-models";
 
 // Models are tried in order. If one is overloaded (503/500/502/504) we retry it once after a
 // short pause, then move on; if it's rate-limited (429) or unknown (404) we move on right away.
@@ -49,10 +50,18 @@ async function requestOnce(
 
 async function generate(apiKey: string, contents: GeminiContent[], systemPrompt?: string): Promise<string> {
   const trail: string[] = []; // e.g. "gemini-flash-latest 503" — model names + status codes only, never the key
+  const tried = new Set<string>();
   let lastErr: GeminiError | undefined;
 
-  for (const model of MODELS) {
-    for (let attempt = 0; attempt < 2; attempt++) {
+  const fail = (err: GeminiError): never => {
+    err.detail = trail.join(" → ");
+    throw err;
+  };
+
+  /** Returns the answer, or null to move on to the next model. Throws for problems no other model can fix. */
+  async function attempt(model: string): Promise<string | null> {
+    tried.add(model);
+    for (let i = 0; i < 2; i++) {
       try {
         return await requestOnce(apiKey, model, contents, systemPrompt);
       } catch (err) {
@@ -61,27 +70,36 @@ async function generate(apiKey: string, contents: GeminiContent[], systemPrompt?
 
         if (status === 404 || status === 429) {
           trail.push(`${model} ${status}`);
-          break; // other models have their own availability/quota
+          return null; // other models have their own availability/quota
         }
         if (status !== undefined && OVERLOADED.has(status)) {
-          if (attempt === 0) {
+          if (i === 0) {
             await sleep(RETRY_PAUSE_MS); // brief pause, one retry on the same model
-          } else {
-            trail.push(`${model} ${status}`);
+            continue;
           }
-          continue;
+          trail.push(`${model} ${status}`);
+          return null;
         }
         // 400 / 401 / 403 / empty answer: another model won't fix these — stop and report.
         trail.push(`${model} ${status ?? "error"}`);
-        lastErr.detail = trail.join(" → ");
-        throw lastErr;
+        return fail(lastErr);
       }
     }
+    return null;
   }
 
-  const finalErr = (lastErr ?? new Error("Gemini request failed")) as GeminiError;
-  finalErr.detail = trail.join(" → ");
-  throw finalErr;
+  for (const model of MODELS) {
+    const text = await attempt(model);
+    if (text !== null) return text;
+  }
+
+  // The usual models all failed: use whatever Google says this key can call today.
+  for (const model of await discoverGeminiModels(apiKey, tried)) {
+    const text = await attempt(model);
+    if (text !== null) return text;
+  }
+
+  return fail((lastErr ?? new Error("Gemini request failed")) as GeminiError);
 }
 
 export async function callGemini(apiKey: string, prompt: string): Promise<string> {

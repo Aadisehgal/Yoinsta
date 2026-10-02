@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
+import { copyText } from "@/lib/copy-text";
 
 interface CodeRow {
   id: string;
@@ -18,6 +19,8 @@ export function AccessCodesPanel() {
   const [generating, setGenerating] = useState(false);
   const [maxUses, setMaxUses] = useState(10);
   const [justCreated, setJustCreated] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
 
   async function load() {
     const res = await fetch("/api/admin/codes");
@@ -33,15 +36,22 @@ export function AccessCodesPanel() {
   async function handleGenerate() {
     setGenerating(true);
     setJustCreated(null);
-    const res = await fetch("/api/admin/codes", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ maxUses }),
-    });
-    const data = await res.json();
-    if (data.code) setJustCreated(data.code);
-    setGenerating(false);
-    load();
+    setError(null);
+    try {
+      const res = await fetch("/api/admin/codes", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ maxUses }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (data.code) setJustCreated(data.code);
+      else setError(data.error ?? "Couldn't create a code. Try again.");
+    } catch {
+      setError("Network problem — try again.");
+    } finally {
+      setGenerating(false);
+      load();
+    }
   }
 
   async function handleToggle(id: string, isActive: boolean) {
@@ -76,9 +86,25 @@ export function AccessCodesPanel() {
           <p className="text-muted">
             Copy this now — only the hash is stored, this code can&apos;t be shown again:
           </p>
-          <p className="mt-1 font-mono text-base tracking-wide text-saffron-400">{justCreated}</p>
+          <p className="mt-1 select-all font-mono text-base tracking-wide text-saffron-400">{justCreated}</p>
+          <Button
+            type="button"
+            size="sm"
+            variant="secondary"
+            className="mt-2"
+            onClick={async () => {
+              setCopied(await copyText(justCreated));
+              setTimeout(() => setCopied(false), 1800);
+            }}
+          >
+            {copied ? "Copied ✓" : "Copy code"}
+          </Button>
+          <p className="mt-2 text-xs text-muted">
+            Paste it in Settings → &ldquo;Have a code?&rdquo; to remove ads on that account.
+          </p>
         </div>
       )}
+      {error && <p className="text-sm text-red-400">{error}</p>}
 
       <div className="space-y-2">
         {loading && <p className="text-sm text-muted">Loading…</p>}

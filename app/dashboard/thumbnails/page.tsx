@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { Card, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { copyText } from "@/lib/copy-text";
@@ -125,6 +126,17 @@ export default function ThumbnailsPage() {
           Needs an OpenAI or Gemini key in Settings — Groq and Claude don&apos;t do image generation.
         </p>
       </div>
+
+      <Link
+        href="/dashboard/thumbnails/maker"
+        className="block rounded-lg border border-saffron-500/40 bg-saffron-500/5 p-4 transition-colors hover:bg-saffron-500/10"
+      >
+        <p className="font-medium">Free Thumbnail Maker →</p>
+        <p className="mt-1 text-sm text-muted">
+          Pick a picture or a frame from your video, add big text, then save it or send it straight to YouTube. No AI
+          credits needed.
+        </p>
+      </Link>
 
       <Card>
         <form onSubmit={handleGenerate} className="space-y-3">

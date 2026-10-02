@@ -2,11 +2,14 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { NAV_ITEMS, isNavActive } from "@/components/nav-items";
+import { useSession } from "next-auth/react";
+import { ADMIN_ITEM, NAV_ITEMS, isNavActive } from "@/components/nav-items";
 import { cn } from "@/lib/utils";
 
 export function Sidebar() {
   const pathname = usePathname();
+  const { data: session } = useSession();
+  const items = session?.user?.role === "ADMIN" ? [...NAV_ITEMS, ADMIN_ITEM] : NAV_ITEMS;
 
   return (
     <aside className="hidden md:flex w-60 shrink-0 flex-col border-r border-border bg-ink-900 px-3 py-6">
@@ -15,7 +18,7 @@ export function Sidebar() {
       </Link>
 
       <nav className="mt-8 flex flex-col gap-1">
-        {NAV_ITEMS.map(({ href, label, icon: Icon }) => {
+        {items.map(({ href, label, icon: Icon }) => {
           const active = isNavActive(pathname, href);
           return (
             <Link

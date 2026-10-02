@@ -1,9 +1,7 @@
 import crypto from "crypto";
 import { sha256Hash } from "@/lib/encryption";
 import { prisma } from "@/lib/prisma";
-
-// No ambiguous chars (I/1, O/0) — codes get typed by hand.
-const CODE_CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+import { CODE_CHARS, describeBadCodeShape, normalizeAccessCode } from "@/lib/access-code-format";
 
 function generateReadableCode(): string {
   const segment = () =>
@@ -33,7 +31,11 @@ export async function redeemAccessCode(
   userId: string,
   rawCode: string
 ): Promise<{ ok: true } | { ok: false; error: string }> {
-  const codeHash = sha256Hash(rawCode.trim().toUpperCase());
+  // Say what's wrong with obviously-not-a-code input (like a PIN) instead of a vague "invalid".
+  const badShape = describeBadCodeShape(rawCode);
+  if (badShape) return { ok: false, error: badShape };
+
+  const codeHash = sha256Hash(normalizeAccessCode(rawCode));
 
   const code = await prisma.accessCode.findUnique({ where: { codeHash } });
   if (!code || !code.isActive) return { ok: false, error: "Invalid or inactive code." };
