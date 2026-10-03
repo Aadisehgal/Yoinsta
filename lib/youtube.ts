@@ -19,7 +19,9 @@ export function buildYouTubeAuthUrl(state: string): string {
     response_type: "code",
     scope: SCOPES,
     access_type: "offline", // required to get a refresh_token
-    prompt: "consent", // forces the consent screen so we get a refresh_token every time
+    // select_account: choose which Google account owns the channel; consent: forces the consent screen so
+    // we get a refresh_token every time. (Google accepts several space-separated values.)
+    prompt: "select_account consent",
     state,
   });
   return `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`;

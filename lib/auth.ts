@@ -23,6 +23,9 @@ export const authOptions: NextAuthOptions = {
     GoogleProvider({
       clientId: process.env.GOOGLE_CLIENT_ID as string,
       clientSecret: process.env.GOOGLE_CLIENT_SECRET as string,
+      // Always show Google's "Choose an account" screen (with "Use another account"). Without this Google
+      // silently picks the account already signed in on the browser, so you could never switch accounts.
+      authorization: { params: { prompt: "select_account" } },
     }),
   ],
   callbacks: {
