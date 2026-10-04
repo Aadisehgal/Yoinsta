@@ -2,7 +2,8 @@ import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { cached } from "@/lib/redis";
+import { cached, redis } from "@/lib/redis";
+import { competitorContextCacheKey } from "@/lib/competitors";
 import { getUserAccessToken, getPublicChannel } from "@/lib/youtube";
 
 const MAX_COMPETITORS = 5;
@@ -74,6 +75,7 @@ export async function POST(req: Request) {
     const competitor = await prisma.competitor.create({
       data: { userId: session.user.id, platform: "youtube", channelId: channel.id, title: channel.title },
     });
+    await redis.del(competitorContextCacheKey(session.user.id)).catch(() => 0); // the AI should know right away
 
     return NextResponse.json({ id: competitor.id, channelId: channel.id, title: channel.title, channel });
   } catch {

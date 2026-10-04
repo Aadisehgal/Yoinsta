@@ -5,12 +5,13 @@ import { cached } from "@/lib/redis";
 import { runChat } from "@/ai/router";
 import { buildChannelContext } from "@/ai/channel-context";
 import { getUserAccessToken } from "@/lib/youtube";
+import { getCompetitorContext } from "@/lib/competitors";
 import type { ChatMessage } from "@/ai/types";
 
 // Chat prompts carry the whole channel context — give the function room to finish (Vercel Hobby max is 60s).
 export const maxDuration = 60;
 
-function buildSystemPrompt(context: string): string {
+function buildSystemPrompt(context: string, competitors: string): string {
   return [
     "You are Yoinsta's YouTube growth coach. You have REAL data for this creator's channel below —",
     "always ground your answers in it (cite specific video titles, view counts, or numbers).",
@@ -20,6 +21,16 @@ function buildSystemPrompt(context: string): string {
     "CHANNEL DATA:",
     context,
     "",
+    ...(competitors
+      ? [
+          "COMPETITOR DATA (channels the creator tracks; public stats only):",
+          competitors,
+          "When the creator asks about competitors, compare THEIR numbers with the creator's own above, cite exact",
+          "figures and video titles, and point to what is repeatable. Never invent competitor numbers; if a",
+          "number isn't listed, say it isn't available.",
+          "",
+        ]
+      : []),
     "When diagnosing things like \"why are my views low\", look for real patterns: inconsistent",
     "upload schedule, view counts low relative to subscriber count, weak-performing recent uploads,",
     "outlier videos that did much better/worse than the rest. Keep answers concise and actionable.",
@@ -54,7 +65,10 @@ export async function POST(req: Request) {
       buildChannelContext(accessToken)
     );
 
-    const result = await runChat(session.user.id, buildSystemPrompt(context), messages as ChatMessage[], provider);
+    // Competitor numbers are optional extras — if they can't be read, the chat still answers from the channel data.
+    const competitors = await getCompetitorContext(session.user.id, accessToken);
+
+    const result = await runChat(session.user.id, buildSystemPrompt(context, competitors), messages as ChatMessage[], provider);
     return NextResponse.json(result);
   } catch {
     return NextResponse.json({ error: "Couldn't load your channel data right now." }, { status: 502 });

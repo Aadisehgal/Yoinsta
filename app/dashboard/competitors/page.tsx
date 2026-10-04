@@ -5,6 +5,8 @@ import Image from "next/image";
 import { Card, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { formatIndianNumber } from "@/lib/utils";
+import { InsightsPanel, type InsightsData } from "@/components/competitors/insights-panel";
+import { ReportPanel } from "@/components/competitors/report-panel";
 
 interface ChannelStats {
   id: string;
@@ -29,6 +31,25 @@ export default function CompetitorsPage() {
   const [input, setInput] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
+  const [insights, setInsights] = useState<InsightsData | null>(null);
+  const [insightsLoading, setInsightsLoading] = useState(false);
+  const [insightsError, setInsightsError] = useState<string | null>(null);
+
+  // Slower than the list (reads each channel's recent videos), so it loads after the page is already usable.
+  async function loadInsights() {
+    setInsightsLoading(true);
+    setInsightsError(null);
+    try {
+      const res = await fetch("/api/youtube/competitors/insights");
+      const data = await res.json().catch(() => null);
+      if (res.ok && data) setInsights(data as InsightsData);
+      else setInsightsError(data?.error ?? "Couldn't load the comparison right now.");
+    } catch {
+      setInsightsError("Couldn't load the comparison — check your connection.");
+    } finally {
+      setInsightsLoading(false);
+    }
+  }
 
   async function load() {
     setLoading(true);
@@ -37,8 +58,11 @@ export default function CompetitorsPage() {
       fetch("/api/youtube/competitors").then((r) => r.json()),
     ]);
     if (dashRes.connected && dashRes.channel) setMyChannel(dashRes.channel);
-    setCompetitors(compRes.competitors ?? []);
+    const list: Competitor[] = compRes.competitors ?? [];
+    setCompetitors(list);
     setLoading(false);
+    if (list.length > 0) void loadInsights();
+    else setInsights(null);
   }
 
   useEffect(() => {
@@ -110,6 +134,14 @@ export default function CompetitorsPage() {
         </form>
         {error && <p className="mt-3 text-sm text-red-400">{error}</p>}
       </Card>
+
+      {competitors.length > 0 && insightsLoading && !insights && (
+        <div className="h-32 animate-pulse rounded-lg bg-ink-800" aria-label="Loading comparison" />
+      )}
+      {insightsError && !insights && <p className="text-sm text-red-400">{insightsError}</p>}
+      {insights && <InsightsPanel data={insights} />}
+
+      <ReportPanel hasCompetitors={competitors.length > 0} />
 
       <Card>
         <CardTitle>You</CardTitle>

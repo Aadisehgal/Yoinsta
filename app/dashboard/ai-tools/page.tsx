@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { Suspense, useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { Card, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { MarkdownText } from "@/components/markdown-text";
@@ -9,6 +10,17 @@ import { cn } from "@/lib/utils";
 type Tab = "chat" | "titles";
 
 export default function AiToolsPage() {
+  return (
+    <Suspense fallback={null}>
+      <AiToolsContent />
+    </Suspense>
+  );
+}
+
+function AiToolsContent() {
+  const params = useSearchParams();
+  // Links from other pages (e.g. Competitors) can open the chat with a question already asked.
+  const ask = (params.get("ask") ?? "").trim().slice(0, 300) || undefined;
   const [tab, setTab] = useState<Tab>("chat");
 
   return (
@@ -29,7 +41,7 @@ export default function AiToolsPage() {
         </TabButton>
       </div>
 
-      {tab === "chat" ? <ChannelAuditChat /> : <TitleGenerator />}
+      {tab === "chat" ? <ChannelAuditChat initialAsk={ask} /> : <TitleGenerator />}
     </div>
   );
 }
@@ -66,9 +78,11 @@ const STARTERS = [
   "Why aren't my views growing?",
   "Audit my last few videos — what's working and what isn't?",
   "What should I upload next based on my recent performance?",
+  "Compare me with my competitors using the numbers.",
+  "What is working for my competitors that I'm not doing?",
 ];
 
-function ChannelAuditChat() {
+function ChannelAuditChat({ initialAsk }: { initialAsk?: string }) {
   const [messages, setMessages] = useState<ChatMsg[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
@@ -108,6 +122,12 @@ function ChannelAuditChat() {
     e.preventDefault();
     send(input);
   }
+
+  // Opened with ?ask=... — send that question once, right away.
+  useEffect(() => {
+    if (initialAsk) void send(initialAsk);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return (
     <div className="space-y-4">

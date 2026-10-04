@@ -43,6 +43,8 @@ export interface ScenePromptInput {
   durationSeconds: number;
   clippedToSeconds?: number;
   channelContext: string;
+  /** Optional: numbers for the competitors the creator tracks (skipped when empty or "none tracked"). */
+  competitorContext?: string;
   lang: Lang;
 }
 
@@ -60,6 +62,9 @@ export function buildScenePrompt(input: ScenePromptInput): string {
     "",
     "CHANNEL CONTEXT (real numbers from this creator's channel):",
     input.channelContext.slice(0, 2500) || "(unavailable)",
+    ...(input.competitorContext && !input.competitorContext.startsWith("No competitors")
+      ? ["", "COMPETITORS the creator tracks (public stats):", input.competitorContext.slice(0, 3500)]
+      : []),
     "",
     "TASK",
     "Watch the video, then return exactly this JSON shape:",
@@ -75,7 +80,7 @@ export function buildScenePrompt(input: ScenePromptInput): string {
     "",
     "RULES",
     "- scenes: base them ONLY on what you see and hear; use real M:SS timestamps; cover the whole video in 4-10 scenes (merge similar moments). score = how well that scene holds attention, integer 0-100.",
-    "- nextVideo.animal: recommend ONE animal or creature (with a twist) for the creator's NEXT video, chosen from what worked in THIS video and the channel numbers above. why: 2 short sentences. title: SEO-friendly, under 70 characters, honest.",
+    "- nextVideo.animal: recommend ONE animal or creature (with a twist) for the creator's NEXT video, chosen from what worked in THIS video, the channel numbers above and, if listed, what is working for the competitors. why: 2 short sentences. title: SEO-friendly, under 70 characters, honest.",
     `- nextVideo.prompts: 4-6 prompts, one per scene of the NEXT video. Each must be self-contained and detailed enough to paste into an AI image/video generator: subject, setting, lighting, camera move, style${isShort ? ", vertical 9:16" : ", 16:9"}. Keep the same visual style as this video so the channel stays consistent. Write the prompts in English; no brand names, no real people.`,
   ].join("\n");
 }

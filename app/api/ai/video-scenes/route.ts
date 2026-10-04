@@ -8,6 +8,7 @@ import { checkAndConsumeQuota } from "@/lib/rate-limit";
 import { buildChannelContext } from "@/ai/channel-context";
 import { describeVideoFailure, reviewYouTubeVideo } from "@/ai/providers/gemini-video";
 import { extractVideoId, getFreshAccessToken } from "@/lib/youtube";
+import { getCompetitorContext } from "@/lib/competitors";
 import { getEditableVideo, YouTubeApiError } from "@/lib/youtube-manage";
 import { extractJsonObject, type Lang } from "@/lib/video-analysis";
 import {
@@ -70,12 +71,15 @@ export async function POST(req: Request) {
       buildChannelContext(accessToken)
     ).catch(() => "");
 
+    const competitorContext = await getCompetitorContext(session.user.id, accessToken);
+
     const clipped = video.durationSeconds > MAX_REVIEW_SECONDS ? MAX_REVIEW_SECONDS : undefined;
     const prompt = buildScenePrompt({
       title: video.title,
       durationSeconds: video.durationSeconds,
       clippedToSeconds: clipped,
       channelContext,
+      competitorContext,
       lang,
     });
 

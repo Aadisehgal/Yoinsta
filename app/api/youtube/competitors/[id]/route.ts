@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { redis } from "@/lib/redis";
+import { competitorContextCacheKey } from "@/lib/competitors";
 
 export async function DELETE(_req: Request, { params }: { params: { id: string } }) {
   const session = await getServerSession(authOptions);
@@ -13,5 +15,6 @@ export async function DELETE(_req: Request, { params }: { params: { id: string }
   }
 
   await prisma.competitor.delete({ where: { id: params.id } });
+  await redis.del(competitorContextCacheKey(session.user.id)).catch(() => 0); // the AI should forget it right away
   return NextResponse.json({ ok: true });
 }
