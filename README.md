@@ -1,259 +1,127 @@
-# Yoinsta — Build Order Step 1
+# Yoinsta Android — WebView wrapper + AdMob rewarded ads
 
-**Scope of this step:** project scaffold + full Prisma schema + auth (matches spec section 12,
-step 1: "Project scaffold + Prisma schema + auth").
+Wraps the deployed Yoinsta web app in a WebView and bridges AdMob rewarded ads to it. The web
+side's `<AdGate>` component (in the main `yoinsta` repo) already knows how to call into this —
+see "How the bridge works" below.
 
-## What's included
+**Honest disclaimer:** this sandbox has no Android SDK and no network access, so none of this has
+been compiled or run on a device. The code follows AdMob's and Android's documented APIs closely,
+but expect to fix a small thing or two on your first build — that's normal for any Android project
+written without a compiler in the loop.
 
-- Next.js 14 App Router + TypeScript + Tailwind, configured per section 2 (fixed tech stack)
-- Full Prisma schema — every model from sections 5 and 7, unchanged, plus the relation fields
-  Prisma needs to compile them (the spec's snippets didn't include `@relation` back-references)
-- Google login via NextAuth, JWT sessions (no database session table, per "JWT sessions" in the spec)
-- Admin whitelist logic: role is decided **only** from `ADMIN_EMAILS` on every login, never
-  anywhere else (section 6, rules 1–2)
-- Admin PIN flow (section 6, rule 3): `/admin/pin` → `/api/admin/verify-pin` → session updated →
-  middleware + admin layout both re-check role and PIN (rule 6)
-- `AdminLog` writes on PIN success/failure (rule 5)
-- AES-256-GCM helpers in `lib/encryption.ts` for API keys / OAuth tokens (section 4), plus a
-  SHA-256 helper for the access code hash (section 5)
-- Redis client + a `cached()` helper ready for the YouTube quota-saving cache layer (section 10)
-- Dashboard shell (sidebar + topbar) and an empty-state dashboard home, login page, landing page,
-  admin shell — styled per section 9 (dark by default, no blank empty states)
+## Before you build
 
-## Assumptions made (spec said "make sensible decisions" where unstated)
+1. `WEB_APP_URL` and `APP_HOST` in `MainActivity.java` already point at
+   `https://yoinsta.vercel.app`. Change both if you move to a custom domain.
+2. If you want your own package name instead of `com.yoinsta.app`, change `applicationId` and
+   `namespace` in `app/build.gradle`, and move the Java files to match the new package path.
 
-1. **Login method:** built Google OAuth only for this step. The spec says "Email/Google login"
-   but the env var list (section 11) only has Google credentials, no SMTP/email-provider vars.
-   Add an `Email` NextAuth provider (or credentials + bcrypt) later once you tell me which you want
-   — magic-link email needs an SMTP or Resend/Postmark key that isn't in the fixed env list yet.
-2. **Admin PIN storage:** rather than a DB flag alone, `adminPinOk` lives in the JWT for that
-   session (so it naturally resets on every fresh login, matching "asked on each admin session").
-   The `User.adminPinOk` column from the schema is still there if you'd rather persist it — not
-   currently written to, flagging this so it's not silently unused.
-3. **New-device OTP (section 6, rule 4):** not built yet — it needs an email-sending service
-   (Resend/SES/SMTP) which isn't in the fixed env list. Left as a clear gap rather than guessing
-   a provider; tell me which one and I'll wire it into the PIN flow.
-4. Feature pages (Keywords, SEO Tools, Competitors, AI Tools, Instagram, Settings) are just nav
-   links right now — they 404 until we build them in later steps.
+## Google sign-in inside the app
 
-## Setup (run this yourself — this environment has no network access to do it for you)
+Google **blocks sign-in inside an embedded WebView** ("This browser or app may not be secure"), and a
+sign-in started in the WebView can't be finished in Chrome either (the WebView's cookies don't exist
+there, so NextAuth rejects the callback). So the whole sign-in runs in Chrome, and the app receives
+the finished session through a one-time code:
+
+1. The login page sees `window.AndroidAuth` and calls `startGoogleLogin()`. The app makes a random
+   `verifier`, stores it, and opens `/native/login?challenge=SHA256(verifier)` in a Chrome Custom Tab.
+2. Chrome does the normal Google sign-in. `/native/handoff` then shows an **Open Yoinsta** button
+   carrying a single-use code (valid 2 minutes, bound to the challenge).
+3. The button opens `yoinsta://auth?code=...`. The app loads `/api/native/exchange?code=...&verifier=...`
+   in the WebView; the server checks code + verifier and sets the session cookie in the WebView.
+
+A code made for someone else's sign-in can't be paired with this app's verifier, so intercepting the
+deep link doesn't help an attacker. No `assetlinks.json`, SHA fingerprints or Google Cloud changes needed.
+
+**Connect YouTube** works the same way: `MainActivity` opens `/api/youtube/connect` in a Custom Tab
+(Google consent has to be in a real browser). The channel link is saved on the server, and the app
+reloads its page when you come back.
+
+Other routing rules in `MainActivity`: only `yoinsta.vercel.app` loads inside the app (YouTube links,
+`mailto:` etc. open outside it), the thumbnail "Download" button saves to `Downloads/Yoinsta`, and
+`<input type="file">` (thumbnail upload on the Videos page) opens Android's file picker via
+`WebChromeClient.onShowFileChooser`.
+
+Server side of all this lives in the Next.js repo: `app/native/login`, `app/native/handoff`,
+`app/api/native/exchange`, and the `AndroidAuth` branch in `app/(auth)/login/page.tsx`.
+
+## How the bridge works
+
+- Web page calls `window.AndroidAds.showRewardedAd(nonce)` (only exists inside this app, not in a
+  regular browser — `<AdGate>` already checks for it and falls back to its mock ad otherwise).
+- `RewardedAdBridge` (in `MainActivity.java`) hands off to `RewardedAdManager`, which shows the
+  preloaded AdMob rewarded ad and immediately starts loading the next one.
+- When the ad is dismissed, the native side calls `window.onNativeAdResult(nonce, true|false)`
+  back into the page, which `<AdGate>` listens for and then calls `/api/ads/complete`.
+
+## Building in Termux
 
 ```bash
-npm install
-cp .env.example .env        # fill in every value
-npx prisma migrate dev --name init
-npm run dev
+pkg update && pkg upgrade
+pkg install openjdk-17 gradle aapt aapt2 git wget unzip
+
+# Android SDK command-line tools (Termux doesn't ship these)
+mkdir -p ~/android-sdk/cmdline-tools
+cd ~/android-sdk/cmdline-tools
+wget https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip
+unzip commandlinetools-linux-*.zip && mv cmdline-tools latest
+
+export ANDROID_HOME=~/android-sdk
+export PATH=$PATH:$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools
+
+yes | sdkmanager --licenses
+sdkmanager "platform-tools" "platforms;android-35" "build-tools;35.0.0"
 ```
 
-Generate `NEXTAUTH_SECRET` and `ENCRYPTION_KEY` with:
+Termux's `aapt2` is ARM-native, but Gradle downloads an x86 one by default — override it globally
+(one-time, in your Termux home, not in this repo):
+
 ```bash
-openssl rand -base64 32
+mkdir -p ~/.gradle
+echo "android.aapt2FromMavenOverride=$PREFIX/bin/aapt2" >> ~/.gradle/gradle.properties
 ```
 
-You'll need a Google Cloud OAuth client (Web application) with
-`http://localhost:3000/api/auth/callback/google` as an authorized redirect URI, and a local or
-hosted Postgres + Redis instance for `DATABASE_URL` / `REDIS_URL`.
+Then, from this project's folder:
 
-## Build Order Step 2 — done
-
-- `ai/router.ts` + `ai/providers/{groq,gemini,openai,claude}.ts` + `ai/prompts.ts` — the unified
-  module from spec section 4, all rules followed: server-side only, AES-256 decrypt at call time,
-  20s timeout, same `{ success, content, provider, error? }` shape back, never logs key material.
-- `/api/keys` (GET list masked + POST save-and-auto-test), `/api/keys/test` (re-test),
-  `/api/keys/:id` (DELETE) — matches section 8.
-- `/api/ai/generate` — runs a feature prompt (`titles` implemented; `description`/`tags`/`hooks`
-  templates exist in `ai/prompts.ts`, wire up more UI as those features get built).
-- Settings page (BYOK panel) and an AI Tools page (title generator) — end-to-end proof of
-  "add a key → get AI title suggestions" (first acceptance criterion in section 13).
-
-## Monetization pivot — subscriptions → rewarded ads
-
-Decided in chat: no more FREE/PRO/CREATOR tiers, no Razorpay. Every feature is free for every
-signed-in user; platform-side analysis actions (SEO score, keyword research, channel refresh —
-anything that spends a YouTube API call) are gated one-per-resource behind a rewarded ad. The
-Master Access Code now grants permanent **ad-free** status instead of a paid plan.
-
-What changed:
-- `razorpay` removed from `package.json`; `RAZORPAY_*` removed from `.env.example`
-- `User.plan` / `planExpiresAt` → `User.adFree Boolean`
-- `AccessCode.planType` removed — a code has one effect now: ad-free
-- New `AdUnlock` model + `lib/ads.ts` + `/api/ads/{start,complete,status}` + `<AdGate>` component
-  (`components/ad-gate.tsx`) — wrap any per-resource content in it and it handles the
-  check → ad → unlock flow
-- AI generation (`/api/ai/generate`) is **not** ad-gated — it runs on the user's own key, so it
-  costs Yoinsta nothing either way. The ad-gate applies to platform-side analysis instead.
-
-**Still a placeholder:** `<AdGate>` plays a 5-second mock "ad" (just a countdown) instead of a
-real network's rewarded ad unit — no ad network account exists yet in this environment. Swap
-`runMockAd()` in `components/ad-gate.tsx` for the real SDK's "show rewarded ad" call once you've
-picked a network (Google Ad Manager, Unity Ads, Adsterra, etc. — Ad Manager usually needs a
-minimum-traffic approval, worth checking before committing to one). The bigger thing to do at
-that point: verify the network's **server-to-server reward postback**, not just the client's
-"reward earned" event — right now `completeAdUnlock()` only checks a single-use nonce, which
-stops casual replay but not someone who skips calling the SDK's ad entirely.
-
-## Build Order Step 3 — done
-
-- `lib/youtube.ts` — OAuth URL builder, token exchange/refresh, and raw-fetch wrappers for
-  channels.list, playlistItems.list + videos.list, and the YouTube Analytics v2 report (no
-  `googleapis` SDK needed, keeps the dependency list lean).
-- `/api/youtube/connect` + `/api/youtube/callback` — full OAuth flow with a signed state cookie
-  (CSRF protection), `access_type=offline&prompt=consent` so a refresh token is always issued,
-  encrypted refresh token stored on `Channel.accessTokenEnc`.
-- `/api/youtube/dashboard` (15 min Redis cache) and `/api/youtube/videos` (1 hour cache) — matches
-  section 10's cache windows exactly. Cache misses go through `lib/rate-limit.ts`, a flat daily
-  quota (replaces the old FREE/PRO split — see the monetization pivot above).
-- `/api/youtube/status` + `/api/youtube/disconnect` — connection state and disconnect, wired into
-  the Settings page's new "Connected accounts" card.
-- Real dashboard UI: subscriber/views/watch-time/video-count stat cards, a Recharts line chart of
-  daily views (28d), and a top-videos list, with a skeleton loading state and an empty state that
-  links straight to `/api/youtube/connect`.
-
-**One scoping note:** "top videos" here is all-time views across the uploads playlist, not
-strictly windowed to 28 days — a true 28-day top-videos view needs the Analytics API queried with
-a `video` dimension instead of Data API v3 stats. Flagging it rather than quietly approximating;
-easy to add if you want it exact.
-
-### Setting up Google Cloud for this step
-
-1. In Google Cloud Console, enable **YouTube Data API v3** and **YouTube Analytics API**.
-2. Create an OAuth 2.0 Client ID (Web application). You can reuse the same client for both
-   `GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_SECRET` (login) and `YOUTUBE_CLIENT_ID`/`YOUTUBE_CLIENT_SECRET`
-   (channel connect) if you'd rather manage one client — just add both redirect URIs to it:
-   - `{NEXTAUTH_URL}/api/auth/callback/google`
-   - `{NEXTAUTH_URL}/api/youtube/callback`
-3. `youtube.readonly` and `yt-analytics.readonly` are **sensitive scopes**. While the OAuth consent
-   screen is in "Testing" mode you can add up to 100 test-user emails and everything works; to let
-   anyone connect their channel you'll eventually need Google's OAuth verification review — worth
-   starting that early, it isn't instant.
-4. A new Cloud project gets a default shared quota (commonly 10,000 units/day) — `channels.list`,
-   `playlistItems.list`, and `videos.list` each cost ~1 unit per call, so the Redis caching here
-   is doing real work, not just a nice-to-have.
-
-## Build Order Step 4 — done
-
-- `lib/seo-score.ts` — deterministic (no AI) scorer: title (length, numbers, power words, caps ratio),
-  description (length, timestamps, links, hashtags), tags (count, character budget, long-tail mix).
-  Same input always gives the same score, and every deduction comes with a specific tip.
-- `/api/youtube/seo-score` — paste any public video URL, get a 0–100 score + breakdown. 1h cache,
-  1 quota unit per lookup (videos.list). Ad-gated per video ID — matches the "one ad per video"
-  model from the pivot.
-- `/api/youtube/keywords` — autocomplete-based keyword suggestions (free, no quota — Google's public
-  suggest endpoint) plus a **heuristic** competition/opportunity score from the topic's top 10
-  ranking videos (avg views + channel concentration). 24h cache (per spec) and a strict 5/day quota
-  on top of that, because the underlying `search.list` call costs **100 quota units** — by far the
-  most expensive call in the app. Ad-gated per topic.
-- Both tools reuse the signed-in user's own connected YouTube access token (`getUserAccessToken` in
-  `lib/youtube.ts`) rather than a separate API key, so there's no new Google Cloud step needed right
-  now — the tradeoff is they only work once a channel is connected.
-
-**Being upfront about the "opportunity score":** it's a heuristic built from real data (top-ranking
-videos' views and channel diversity), not actual Google Trends search-volume numbers — that needs a
-paid Google Ads API integration. The UI says this explicitly rather than implying more precision
-than it has.
-
-## Sidebar cleanup — Competitors done, Instagram honestly not
-
-- **Competitors** (`/dashboard/competitors`) — add up to 5 channels by URL/@handle/ID
-  (`lib/youtube.ts` → `parseChannelInput` + `getPublicChannel`), see their subscriber/view/video
-  counts next to your own, 1h cached per channel. Not ad-gated — it's a running list you glance at,
-  not a one-off deep analysis like SEO Score or Keywords.
-- **Instagram** (`/dashboard/instagram`) — replaced the raw 404 with an honest "coming soon" card
-  instead of building a shortcut version. Real reason: this needs its own Meta Developer app,
-  Instagram OAuth flow, and Meta's App Review for the `instagram_basic`/`instagram_manage_insights`
-  permissions — a separate setup on the scale of everything we just did for Google Cloud, except
-  Meta's review is typically slower and stricter (screencasts, use-case justification, review
-  queue). Worth doing as its own dedicated step rather than rushing it in here.
-
-## Daily Video Ideas — done (priority 2 of 4)
-
-- `/api/ai/ideas` — two modes:
-  - **Personalized**: reuses the same 15-min channel-context cache the Channel Audit chat uses
-    (`ai:channel-context:<userId>` in `ai/channel-context.ts`) — real recent-video and stats
-    grounding, no new YouTube API cost if the chat already warmed the cache this session.
-  - **Trending**: grounds on a topic's free autocomplete suggestions (no quota cost at all).
-- Both run through `runAI()` on the user's own key — **not ad-gated**, same reasoning as the rest
-  of AI Tools: this costs Yoinsta nothing, and ideas are the kind of thing people want to regenerate
-  a lot, so gating each generation behind an ad would be bad UX for something free to run.
-- `/dashboard/ideas` — tabbed like AI Tools (Personalized / Trending), each a one-button generate
-  flow reusing the same numbered-list parsing as the Title Generator.
-
-**Next up (priorities 3–4):** AI Thumbnail Generator (new image-gen capability), then
-Rising/Trending Keywords (needs a time-series store).
-
-## Outlier Video Finder — done (priority 1 of 4)
-
-- `lib/youtube.ts` → `findOutlierVideos()` — searches a topic (`search.list`, `order=viewCount`),
-  fetches view counts for the results, batch-fetches each result's channel stats (`channels.list`
-  with comma-separated IDs, 1 call for up to 50 channels), and computes
-  `multiplier = video views ÷ (channel's total views ÷ total videos)`. Sorted highest multiplier
-  first — the videos that broke out furthest from that channel's normal.
-- `/api/youtube/outliers` — same cost profile and guardrails as Keywords: ad-gated per topic,
-  24h cache, 5/day quota on cache misses (this is another `search.list` call, 100 units).
-- `/dashboard/outliers` — topic search, results link straight to YouTube, multiplier shown as a
-  colored badge (red 20x+, amber 8x+, teal 3x+).
-
-**Next up (priorities 2–4 from the roadmap):** Daily Video Ideas, AI Thumbnail Generator (needs a
-new image-generation capability — BYOK providers don't all support image gen the same way text
-does, so this needs its own design pass), then Rising/Trending Keywords (needs a time-series data
-store, not just a snapshot).
-
-## Channel Audit chatbot — done
-
-A real conversational AI assistant on the "AI Tools" page (now tabbed: Channel Audit + Title
-Generator), grounded in the user's actual channel data rather than generic advice:
-
-- `ai/channel-context.ts` — pulls real channel stats, 28-day analytics, and the 15 most recent
-  videos with their view/like/comment counts, formats it as plain text.
-- The system prompt hands this to the model with an explicit instruction to cite real numbers and
-  say "can't tell from this data" rather than guess — same honesty principle as the SEO scorer and
-  Keywords tool.
-- `ai/router.ts` gained a chat-shaped path alongside the existing single-prompt one: `runChat()` +
-  `callProviderChat()`, with a `chatXxx()` variant per provider (Groq/OpenAI take a `system` message
-  in the array, Claude uses its separate `system` param, Gemini uses `systemInstruction` + a proper
-  chat history via `startChat()`).
-- Context is cached 15 minutes (`ai:channel-context:<userId>`) so a whole conversation doesn't
-  re-fetch YouTube data on every message.
-- **Not ad-gated**, same reasoning as the title generator: it runs on the user's own AI key, so it
-  costs Yoinsta nothing regardless of how often it's used.
-
-## Bug fix — /admin/pin infinite redirect loop
-
-`app/admin/layout.tsx` redirected to `/admin/pin` whenever the PIN wasn't confirmed yet — but
-`/admin/pin` is *itself* nested under `/admin`, so it inherited that same layout and immediately
-redirected to itself. Moved the protected pages into a route group so the PIN page escapes it:
-
-```
-app/admin/(protected)/layout.tsx   ← the redirect checks (was app/admin/layout.tsx)
-app/admin/(protected)/page.tsx     ← the admin home page (was app/admin/page.tsx)
-app/admin/pin/page.tsx             ← unchanged, now outside the layout that was looping it
+```bash
+gradle assembleDebug --no-daemon
 ```
 
-Route groups (parens) don't affect the URL — `/admin` and `/admin/pin` resolve exactly as before.
+(Use the globally-installed `gradle` command, not `./gradlew` — this project doesn't ship a
+wrapper, since generating the wrapper jar needs network access this environment didn't have. If
+you'd rather use the wrapper, run `gradle wrapper --gradle-version 8.10.2` once yourself.)
 
-## Access-code system — done
+The APK lands at `app/build/outputs/apk/debug/app-debug.apk`. Copy it to your device (or you're
+likely already on it in Termux) and install it — you'll need to allow "install from unknown
+sources" for whichever file manager/browser you use to open it.
 
-- `lib/access-code.ts` — `createAccessCode()` generates a readable code (`YOIN-XXXX-XXXX`, no
-  ambiguous characters) and stores **only its SHA-256 hash**; the plain code is returned exactly
-  once, at creation, same rule as every other secret in this project. `redeemAccessCode()` checks
-  active/expiry/usage-limit/already-redeemed, then atomically (one `$transaction`) records the
-  redemption, bumps `usedCount`, and sets `User.adFree = true`.
-- Admin: the "Access codes" card on `/admin` (`components/admin/access-codes-panel.tsx`) generates
-  codes with a configurable max-uses, lists existing ones with their usage, and can
-  activate/deactivate any code. Every generate/toggle action logs to `AdminLog`.
-- User: a "Have a code?" card on Settings redeems one and calls NextAuth's `update()` afterward so
-  the ad-free badge in the topbar flips immediately, without needing to log out and back in — same
-  trick used for the admin PIN.
+## Pushing to GitHub
 
-## Companion Android app
+```bash
+git init
+git add .
+git commit -m "Yoinsta Android wrapper — WebView + AdMob rewarded ads (test IDs)"
+git remote add origin https://github.com/YOUR_USERNAME/yoinsta-android.git
+git push -u origin main
+```
 
-`<AdGate>` (`components/ad-gate.tsx`) now detects a native bridge (`window.AndroidAds`) and shows
-a real AdMob rewarded ad when this site is opened inside the separate **yoinsta-android** WebView
-wrapper project, falling back to its mock ad in a plain browser. That project is its own repo —
-built with Termux/Gradle, currently wired to Google's public test AdMob IDs.
+## Going live: swapping in your real AdMob IDs
 
-## Next step
+Two places have Google's public **test** IDs — replace both before publishing:
 
-Build Order Step 5 remainder: Users list + Admin logs viewer on `/admin` (still placeholders), plus
-BullMQ background jobs for heavier YouTube data refreshes. Video Comparison (spec section 3,
-feature 7) and Instagram (section above) are also still open.
+1. `AndroidManifest.xml` → the `com.google.android.gms.ads.APPLICATION_ID` meta-data value
+   (your AdMob **App ID**).
+2. `RewardedAdManager.java` → the `AD_UNIT_ID` constant (your **rewarded ad unit ID**).
+
+Get both from the AdMob console after creating your app and a rewarded ad unit there. Test with
+the test IDs until everything works end-to-end — AdMob can suspend accounts for accidentally
+clicking your own real ads during development, which is exactly what the test IDs are for.
+
+## App icon
+
+The launcher icon is the Yoinsta logo. `mipmap-*/ic_launcher*.png` are the legacy (Android 7 and older)
+and round versions; `drawable/ic_launcher_foreground.png` + the solid-black `ic_launcher_background.xml`
+make the adaptive icon used on Android 8+ (the logo is scaled to stay inside the safe zone, so no launcher
+shape can crop it). `store-assets/play-store-icon-512.png` is the 512x512 icon for the Play Store listing.
+After installing a build with a new icon, a launcher may keep showing the old one until you reinstall or
+restart it.
