@@ -6,12 +6,13 @@ import { runChat } from "@/ai/router";
 import { buildChannelContext } from "@/ai/channel-context";
 import { getUserAccessToken } from "@/lib/youtube";
 import { getCompetitorContext } from "@/lib/competitors";
+import { getInstagramContext } from "@/lib/instagram";
 import type { ChatMessage } from "@/ai/types";
 
 // Chat prompts carry the whole channel context — give the function room to finish (Vercel Hobby max is 60s).
 export const maxDuration = 60;
 
-function buildSystemPrompt(context: string, competitors: string): string {
+function buildSystemPrompt(context: string, competitors: string, instagram: string): string {
   return [
     "You are Yoinsta's YouTube growth coach. You have REAL data for this creator's channel below —",
     "always ground your answers in it (cite specific video titles, view counts, or numbers).",
@@ -21,6 +22,15 @@ function buildSystemPrompt(context: string, competitors: string): string {
     "CHANNEL DATA:",
     context,
     "",
+    ...(instagram
+      ? [
+          "INSTAGRAM DATA (the creator's connected Instagram account):",
+          instagram,
+          "When asked about Instagram, use these exact numbers and captions. Instagram allows at most 5 hashtags per",
+          "post — never recommend more. If a number isn't listed, say it isn't available.",
+          "",
+        ]
+      : []),
     ...(competitors
       ? [
           "COMPETITOR DATA (channels the creator tracks; public stats only):",
@@ -67,8 +77,9 @@ export async function POST(req: Request) {
 
     // Competitor numbers are optional extras — if they can't be read, the chat still answers from the channel data.
     const competitors = await getCompetitorContext(session.user.id, accessToken);
+    const instagram = await getInstagramContext(session.user.id);
 
-    const result = await runChat(session.user.id, buildSystemPrompt(context, competitors), messages as ChatMessage[], provider);
+    const result = await runChat(session.user.id, buildSystemPrompt(context, competitors, instagram), messages as ChatMessage[], provider);
     return NextResponse.json(result);
   } catch {
     return NextResponse.json({ error: "Couldn't load your channel data right now." }, { status: 502 });
